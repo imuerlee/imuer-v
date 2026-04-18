@@ -17,7 +17,41 @@ class LocalDatabase {
       path,
       version: AppConstants.dbVersion,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    final columns = await db.rawQuery('PRAGMA table_info(servers)');
+    final columnNames = columns.map((c) => c['name'] as String).toList();
+
+    final newColumns = [
+      ('fingerprint', 'TEXT'),
+      ('verify_hostname', 'INTEGER'),
+      ('public_key', 'TEXT'),
+      ('private_key', 'TEXT'),
+      ('peer_public_key', 'TEXT'),
+      ('preshared_key', 'TEXT'),
+      ('obfs_password', 'TEXT'),
+      ('speed_limit', 'INTEGER'),
+      ('speed_limit_up', 'INTEGER'),
+      ('speed_limit_down', 'INTEGER'),
+      ('auth', 'INTEGER'),
+      ('auth_username', 'TEXT'),
+      ('auth_password', 'TEXT'),
+      ('allow_insecure', 'INTEGER'),
+      ('plugin_opts', 'TEXT'),
+      ('protocol_param', 'TEXT'),
+      ('obfs_param', 'TEXT'),
+      ('public_key1', 'TEXT'),
+      ('short_id', 'TEXT'),
+    ];
+
+    for (final (colName, colType) in newColumns) {
+      if (!columnNames.contains(colName)) {
+        await db.execute('ALTER TABLE servers ADD COLUMN $colName $colType');
+      }
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -39,6 +73,31 @@ class LocalDatabase {
         path TEXT,
         sni TEXT,
         alpn TEXT,
+        fingerprint TEXT,
+        verify_hostname INTEGER,
+        public_key TEXT,
+        private_key TEXT,
+        peer_public_key TEXT,
+        preshared_key TEXT,
+        mtu INTEGER,
+        reserved TEXT,
+        obfs_password TEXT,
+        speed_limit INTEGER,
+        speed_limit_up INTEGER,
+        speed_limit_down INTEGER,
+        auth INTEGER,
+        auth_username TEXT,
+        auth_password TEXT,
+        allow_insecure INTEGER,
+        flow TEXT,
+        method TEXT,
+        plugin TEXT,
+        plugin_opts TEXT,
+        protocol_param TEXT,
+        obfs TEXT,
+        obfs_param TEXT,
+        public_key1 TEXT,
+        short_id TEXT,
         country TEXT,
         city TEXT,
         latitude REAL,
