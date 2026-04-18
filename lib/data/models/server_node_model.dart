@@ -114,6 +114,7 @@ class ServerNodeModel extends ServerNode {
     );
   }
 
+  @override
   Map<String, dynamic> toJson() {
     return {
       'id': id,

@@ -459,6 +459,8 @@ class ServersPage extends StatelessWidget {
   }
 
   Future<void> _importFromClipboard(BuildContext context) async {
+    final bloc = context.read<ServerBloc>();
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       if (data?.text != null && data!.text!.isNotEmpty) {
@@ -487,36 +489,30 @@ class ServersPage extends StatelessWidget {
 
         if (servers.isNotEmpty) {
           for (final server in servers) {
-            context.read<ServerBloc>().add(AddServer(server));
+            bloc.add(AddServer(server));
           }
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Imported ${servers.length} server(s)'),
-                backgroundColor: AppColors.success,
-              ),
-            );
-          }
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text('Imported ${servers.length} server(s)'),
+              backgroundColor: AppColors.success,
+            ),
+          );
         } else {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('No valid servers found in clipboard'),
-                backgroundColor: AppColors.error,
-              ),
-            );
-          }
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('No valid servers found in clipboard'),
+              backgroundColor: AppColors.error,
+            ),
+          );
         }
       }
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to read clipboard: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to read clipboard: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
@@ -533,6 +529,8 @@ class ServersPage extends StatelessWidget {
   }
 
   Future<void> _importFromFile(BuildContext context) async {
+    final bloc = context.read<ServerBloc>();
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
@@ -546,36 +544,30 @@ class ServersPage extends StatelessWidget {
 
         if (servers.isNotEmpty) {
           for (final server in servers) {
-            context.read<ServerBloc>().add(AddServer(server));
+            bloc.add(AddServer(server));
           }
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Imported ${servers.length} server(s) from file'),
-                backgroundColor: AppColors.success,
-              ),
-            );
-          }
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text('Imported ${servers.length} server(s) from file'),
+              backgroundColor: AppColors.success,
+            ),
+          );
         } else {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('No valid servers found in file'),
-                backgroundColor: AppColors.error,
-              ),
-            );
-          }
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('No valid servers found in file'),
+              backgroundColor: AppColors.error,
+            ),
+          );
         }
       }
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to read file: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to read file: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
@@ -729,29 +721,17 @@ class _QRScannerViewState extends State<_QRScannerView> {
                 children: [
                   if (_controller != null)
                     IconButton(
-                      icon: ValueListenableBuilder(
-                        valueListenable: _controller!.torchState,
-                        builder: (context, state, child) {
-                          return Icon(
-                            state == TorchState.on
-                                ? Icons.flash_on
-                                : Icons.flash_off,
-                            color: AppColors.primary,
-                          );
-                        },
+                      icon: const Icon(
+                        Icons.flash_off,
+                        color: AppColors.primary,
                       ),
                       onPressed: () => _controller?.toggleTorch(),
                     ),
                   if (_controller != null)
                     IconButton(
-                      icon: ValueListenableBuilder(
-                        valueListenable: _controller!.cameraFacingState,
-                        builder: (context, state, child) {
-                          return const Icon(
-                            Icons.flip_camera_ios,
-                            color: AppColors.primary,
-                          );
-                        },
+                      icon: const Icon(
+                        Icons.flip_camera_ios,
+                        color: AppColors.primary,
                       ),
                       onPressed: () => _controller?.switchCamera(),
                     ),

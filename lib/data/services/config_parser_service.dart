@@ -140,7 +140,7 @@ class ConfigParserService {
         final pluginStr = Uri.decodeComponent(parts[1].replaceFirst('plugin=', ''));
         if (pluginStr.contains(';')) {
           plugin = pluginStr.split(';')[0];
-          pluginOpts = pluginStr.substring(plugin!.length + 1);
+          pluginOpts = pluginStr.substring(plugin.length + 1);
         } else {
           plugin = pluginStr;
         }
@@ -221,7 +221,7 @@ class ConfigParserService {
       if (questionIndex > 0) {
         paramsStr = utf8.decode(base64Decode(jsonStr.substring(questionIndex + 1).replaceAll('-', '+').replaceAll('_', '/')));
         final paramParts = paramsStr.split(';');
-        String? protocol, protocolParam, obfs, obfsParam;
+        String? protocolParam, obfs, obfsParam;
         
         for (final p in paramParts) {
           if (p.startsWith('protocol=')) protocol = p.substring(9);
@@ -450,7 +450,7 @@ class ConfigParserService {
     try {
       String uriStr = config;
       if (uriStr.startsWith('socks://')) {
-        uriStr = 'socks5://' + uriStr.substring(7);
+        uriStr = 'socks5://${uriStr.substring(7)}';
       }
       final uri = Uri.parse(uriStr);
       final hasAuth = uri.userInfo.isNotEmpty;

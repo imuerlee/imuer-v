@@ -528,8 +528,8 @@ insecure_port = 0''';
     final params = <String, String?>{
       'sni': sni ?? host ?? address,
       'obfs': obfsPassword != null ? 'salamander:$obfsPassword' : null,
-      'up': speedLimitUp != null ? '${speedLimitUp} Mbps' : null,
-      'down': speedLimitDown != null ? '${speedLimitDown} Mbps' : null,
+      'up': speedLimitUp != null ? '$speedLimitUp Mbps' : null,
+      'down': speedLimitDown != null ? '$speedLimitDown Mbps' : null,
     };
     params.removeWhere((key, value) => value == null || value.isEmpty);
     final query = params.entries.where((e) => e.value != null).map((e) => '${e.key}=${e.value}').join('&');
