@@ -35,12 +35,21 @@ jobs:
       - name: Build Windows Release
         run: flutter build windows --release
 
-      - name: Find built files
-        id: find_files
+      - name: Find and copy release files
+        shell: pwsh
         run: |
-          echo "Checking build output..."
-          Get-ChildItem -Path "build" -Recurse -Directory | ForEach-Object { $_.FullName }
-          Get-ChildItem -Path "build/windows" -Recurse -Filter "*.exe" | ForEach-Object { $_.FullName }
+          $exe = Get-ChildItem -Path "build" -Recurse -Filter "nebula_vpn.exe" | Select-Object -First 1
+          if ($exe) {
+            $releaseDir = $exe.Directory.FullName
+            Write-Host "Found release directory: $releaseDir"
+            Copy-Item -Path "$releaseDir\*" -Destination "build\windows\runner\Release" -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Path "build\windows\runner\Release" -Force | Out-Null
+            Copy-Item -Path "$releaseDir\*" -Destination "build\windows\runner\Release" -Recurse -Force
+            Write-Host "Files copied successfully"
+          } else {
+            Write-Host "ERROR: nebula_vpn.exe not found"
+            Get-ChildItem -Path "build" -Recurse -Filter "*.exe" | Select-Object -First 10
+          }
 
       - name: Create ZIP archive
         shell: pwsh
@@ -51,8 +60,8 @@ jobs:
             Write-Host "Created NebulaVPN-windows.zip"
             Get-ChildItem "NebulaVPN-windows.zip"
           } else {
-            Write-Host "Release path not found, checking other locations..."
-            Get-ChildItem -Path "build" -Recurse -Filter "*.exe" | Select-Object -First 5
+            Write-Host "ERROR: Release path not found at $releasePath"
+            exit 1
           }
 
       - name: Upload Windows artifact
