@@ -45,7 +45,10 @@ class ServerBloc extends Bloc<ServerEvent, ServerState> {
       await _database.insertServer(model);
       add(const LoadServers());
     } catch (e) {
-      emit(state.copyWith(errorMessage: e.toString()));
+      emit(state.copyWith(
+        status: ServerStatus.error,
+        errorMessage: 'Failed to add server: ${e.toString()}',
+      ));
     }
   }
 
@@ -55,7 +58,10 @@ class ServerBloc extends Bloc<ServerEvent, ServerState> {
       await _database.updateServer(model);
       add(const LoadServers());
     } catch (e) {
-      emit(state.copyWith(errorMessage: e.toString()));
+      emit(state.copyWith(
+        status: ServerStatus.error,
+        errorMessage: 'Failed to update server: ${e.toString()}',
+      ));
     }
   }
 
@@ -64,7 +70,10 @@ class ServerBloc extends Bloc<ServerEvent, ServerState> {
       await _database.deleteServer(event.serverId);
       add(const LoadServers());
     } catch (e) {
-      emit(state.copyWith(errorMessage: e.toString()));
+      emit(state.copyWith(
+        status: ServerStatus.error,
+        errorMessage: 'Failed to delete server: ${e.toString()}',
+      ));
     }
   }
 
@@ -74,7 +83,10 @@ class ServerBloc extends Bloc<ServerEvent, ServerState> {
       await _database.updateServerLatency(event.serverId, latency);
       add(const LoadServers());
     } catch (e) {
-      emit(state.copyWith(errorMessage: e.toString()));
+      emit(state.copyWith(
+        status: ServerStatus.error,
+        errorMessage: 'Failed to test latency: ${e.toString()}',
+      ));
     }
   }
 
@@ -88,7 +100,10 @@ class ServerBloc extends Bloc<ServerEvent, ServerState> {
       }
       add(const LoadServers());
     } catch (e) {
-      emit(state.copyWith(errorMessage: e.toString()));
+      emit(state.copyWith(
+        status: ServerStatus.error,
+        errorMessage: 'Failed to test latency: ${e.toString()}',
+      ));
     } finally {
       emit(state.copyWith(isTestingLatency: false));
     }
