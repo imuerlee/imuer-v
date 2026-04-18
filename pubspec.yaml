@@ -1,0 +1,51 @@
+name: nebula_vpn
+description: "A cross-platform VPN client with sci-fi themed UI"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  
+  # State Management
+  flutter_bloc: ^9.1.1
+  equatable: ^2.0.7
+  
+  # Dependency Injection
+  get_it: ^8.0.3
+  
+  # Storage
+  shared_preferences: ^2.5.3
+  sqflite: ^2.4.2
+  path_provider: ^2.1.5
+  path: ^1.9.0
+  
+  # Network
+  dio: ^5.8.0
+  connectivity_plus: ^6.1.4
+  
+  # Utilities
+  uuid: ^4.5.1
+  intl: ^0.20.2
+  
+  # UI Components
+  fl_chart: ^1.0.0
+  shimmer: ^3.0.0
+  google_fonts: ^6.2.1
+  flutter_animate: ^4.5.2
+  percent_indicator: ^4.2.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
