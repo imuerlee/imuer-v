@@ -454,25 +454,27 @@ class SettingsPage extends StatelessWidget {
           'Routing Mode',
           style: TextStyle(color: AppColors.textPrimary),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: RoutingMode.values.map((mode) {
-            return RadioListTile<RoutingMode>(
-              title: Text(
-                _getRoutingModeName(mode),
-                style: const TextStyle(color: AppColors.textPrimary),
-              ),
-              value: mode,
-              groupValue: currentMode,
-              activeColor: AppColors.primary,
-              onChanged: (value) {
-                if (value != null) {
-                  context.read<SettingsBloc>().add(UpdateRoutingMode(value));
-                  Navigator.pop(dialogContext);
-                }
-              },
-            );
-          }).toList(),
+        content: RadioGroup<RoutingMode>(
+          value: currentMode,
+          onChanged: (value) {
+            if (value != null) {
+              context.read<SettingsBloc>().add(UpdateRoutingMode(value));
+              Navigator.pop(dialogContext);
+            }
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: RoutingMode.values.map((mode) {
+              return RadioListTile<RoutingMode>(
+                title: Text(
+                  _getRoutingModeName(mode),
+                  style: const TextStyle(color: AppColors.textPrimary),
+                ),
+                value: mode,
+                activeColor: AppColors.primary,
+              );
+            }).toList(),
+          ),
         ),
       ),
     );
