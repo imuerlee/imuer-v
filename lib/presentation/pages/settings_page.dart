@@ -446,23 +446,17 @@ class SettingsPage extends StatelessWidget {
   }
 
   void _showRoutingModeDialog(BuildContext context, RoutingMode currentMode) {
+    RoutingMode? selectedMode = currentMode;
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text(
-          'Routing Mode',
-          style: TextStyle(color: AppColors.textPrimary),
-        ),
-        content: RadioGroup<RoutingMode>(
-          value: currentMode,
-          onChanged: (value) {
-            if (value != null) {
-              context.read<SettingsBloc>().add(UpdateRoutingMode(value));
-              Navigator.pop(dialogContext);
-            }
-          },
-          child: Column(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text(
+            'Routing Mode',
+            style: TextStyle(color: AppColors.textPrimary),
+          ),
+          content: Column(
             mainAxisSize: MainAxisSize.min,
             children: RoutingMode.values.map((mode) {
               return RadioListTile<RoutingMode>(
@@ -471,7 +465,13 @@ class SettingsPage extends StatelessWidget {
                   style: const TextStyle(color: AppColors.textPrimary),
                 ),
                 value: mode,
+                groupValue: selectedMode,
                 activeColor: AppColors.primary,
+                onChanged: (value) {
+                  setState(() => selectedMode = value);
+                  context.read<SettingsBloc>().add(UpdateRoutingMode(value));
+                  Navigator.pop(dialogContext);
+                },
               );
             }).toList(),
           ),

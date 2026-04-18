@@ -53,6 +53,11 @@ class ServerNodeModel extends ServerNode {
     super.verifyHostname,
     super.publicKey1,
     super.shortId,
+    super.subscriptionUrl,
+    super.subscriptionUpload,
+    super.subscriptionDownload,
+    super.subscriptionTotal,
+    super.subscriptionExpire,
   });
 
   factory ServerNodeModel.fromJson(Map<String, dynamic> json) {

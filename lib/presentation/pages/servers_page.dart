@@ -1838,7 +1838,7 @@ class _AddServerFormState extends State<_AddServerForm> {
     required ValueChanged<String?> onChanged,
   }) {
     return DropdownButtonFormField<String>(
-      value: items.contains(value) ? value : items.first,
+      initialValue: items.contains(value) ? value : (items.isNotEmpty ? items.first : null),
       decoration: InputDecoration(
         labelText: label,
       ),
