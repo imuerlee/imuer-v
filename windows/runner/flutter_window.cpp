@@ -17,27 +17,20 @@ bool FlutterWindow::OnCreate() {
 
   RECT frame = GetClientArea();
 
-  // The size here must match the window dimensions to avoid unnecessary surface
-  // creation / destruction in the startup path.
   flutter_controller_ = std::make_unique<flutter::FlutterViewController>(
       frame.right - frame.left, frame.bottom - frame.top, project_);
-  // Ensure that basic setup of the controller was successful.
   if (!flutter_controller_->engine() || !flutter_controller_->view()) {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  // Setup VPN platform channels
   SetupVpnChannels();
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();
   });
 
-  // Flutter can complete the first frame before the "show window" callback is
-  // registered. The following call ensures a frame is pending to ensure the
-  // window is shown. It is a no-op if the first frame hasn't completed yet.
   flutter_controller_->ForceRedraw();
 
   return true;
@@ -55,7 +48,6 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
-  // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =
         flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam,
@@ -73,6 +65,25 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
 }
+
+class VpnStreamHandler : public flutter::StreamHandler<flutter::EncodableValue> {
+ public:
+  VpnStreamHandler() {}
+
+ protected:
+  std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> OnListenInternal(
+      const flutter::EncodableValue* arguments,
+      std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& events) override {
+    VpnHandler::Instance().SetEventSink(std::move(events));
+    return nullptr;
+  }
+
+  std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> OnCancelInternal(
+      const flutter::EncodableValue* arguments) override {
+    VpnHandler::Instance().SetEventSink(nullptr);
+    return nullptr;
+  }
+};
 
 void FlutterWindow::SetupVpnChannels() {
   // Create method channel
@@ -95,17 +106,6 @@ void FlutterWindow::SetupVpnChannels() {
       });
 
   // Set stream handler for event channel
-  auto stream_handler = std::make_unique<flutter::StreamHandlerFunctions<>>(
-      [](const flutter::EncodableValue* arguments,
-         std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& events)
-          -> std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> {
-        VpnHandler::Instance().OnListen(arguments, std::move(events));
-        return nullptr;
-      },
-      [](const flutter::EncodableValue* arguments)
-          -> std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> {
-        VpnHandler::Instance().OnCancel(arguments);
-        return nullptr;
-      });
-  vpn_event_channel_->SetStreamHandler(std::move(stream_handler));
+  static VpnStreamHandler vpn_stream_handler;
+  vpn_event_channel_->SetStreamHandler(&vpn_stream_handler);
 }
