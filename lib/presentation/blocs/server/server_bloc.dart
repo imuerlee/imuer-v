@@ -188,7 +188,7 @@ class ServerBloc extends Bloc<ServerEvent, ServerState> {
         name: uri.fragment.isNotEmpty ? uri.fragment : 'Shadowsocks Server',
         address: uri.host,
         port: uri.port,
-        protocol: ServerProtocol.shadowsocks,
+        protocol: ServerProtocol.ss,
         username: method,
         password: password,
         country: _estimateCountry(uri.host),

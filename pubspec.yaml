@@ -32,6 +32,12 @@ dependencies:
   uuid: ^4.5.1
   intl: ^0.20.2
   
+  # QR Code Scanner
+  mobile_scanner: ^6.0.0
+  
+  # File Picker
+  file_picker: ^8.0.0
+  
   # UI Components
   fl_chart: ^1.0.0
   shimmer: ^3.0.0
