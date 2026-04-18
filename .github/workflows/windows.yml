@@ -17,7 +17,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Clone Flutter SDK
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.41.7'
@@ -32,20 +32,35 @@ jobs:
       - name: Run flutter analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
-      - name: Build Windows
+      - name: Build Windows Release
         run: flutter build windows --release
 
-      - name: Upload Windows installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-installer
-          path: build/windows/runner/Release/
-          retention-days: 14
+      - name: Find built files
+        id: find_files
+        run: |
+          echo "Checking build output..."
+          Get-ChildItem -Path "build" -Recurse -Directory | ForEach-Object { $_.FullName }
+          Get-ChildItem -Path "build/windows" -Recurse -Filter "*.exe" | ForEach-Object { $_.FullName }
 
       - name: Create ZIP archive
         shell: pwsh
         run: |
-          Compress-Archive -Path "build\windows\runner\Release\*" -DestinationPath "NebulaVPN-windows.zip" -Force
+          $releasePath = "build\windows\runner\Release"
+          if (Test-Path $releasePath) {
+            Compress-Archive -Path "$releasePath\*" -DestinationPath "NebulaVPN-windows.zip" -Force
+            Write-Host "Created NebulaVPN-windows.zip"
+            Get-ChildItem "NebulaVPN-windows.zip"
+          } else {
+            Write-Host "Release path not found, checking other locations..."
+            Get-ChildItem -Path "build" -Recurse -Filter "*.exe" | Select-Object -First 5
+          }
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifact
+          path: NebulaVPN-windows.zip
+          retention-days: 14
 
       - name: Upload release asset
         if: startsWith(github.ref, 'refs/tags/v')
