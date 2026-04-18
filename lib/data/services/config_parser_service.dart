@@ -224,7 +224,6 @@ class ConfigParserService {
         String? protocolParam, obfs, obfsParam;
         
         for (final p in paramParts) {
-          if (p.startsWith('protocol=')) protocol = p.substring(9);
           if (p.startsWith('protocol_param=')) protocolParam = p.substring(16);
           if (p.startsWith('obfs=')) obfs = p.substring(5);
           if (p.startsWith('obfs_param=')) obfsParam = p.substring(11);
