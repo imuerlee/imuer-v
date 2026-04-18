@@ -53,11 +53,11 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
 
-# 解决 sqlite3 API 不兼容问题 - 使用最新兼容版本
+# 解决 sqlite3 API 不兼容问题
 dependency_overrides:
-  sqlite3: ^2.7.0
-  sqflite_common: ^2.5.4+6
-  sqflite_common_ffi: ^2.5.0
+  sqlite3: ^2.5.0
+  sqflite_common: ^2.5.4
+  sqflite_common_ffi: ^2.4.0+2
 
 flutter:
   generate: true
