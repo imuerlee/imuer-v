@@ -1,8 +1,9 @@
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'dart:async';
+import 'package:equatable/equatable.dart';
 import 'package:uuid/uuid.dart';
 import '../../../domain/entities/server_node.dart';
 import '../../../data/datasources/local_database.dart';
-import '../../../data/models/server_node_model.dart';
+import '../../../data/services/config_parser_service.dart';
 import 'server_event.dart';
 import 'server_state.dart';
 
@@ -86,9 +87,27 @@ class ServerBloc extends Bloc<ServerEvent, ServerState> {
 
   Future<void> _onTestServerLatency(TestServerLatency event, Emitter<ServerState> emit) async {
     try {
-      final latency = 50 + (DateTime.now().millisecond % 300);
-      await _database.updateServerLatency(event.serverId, latency);
-      add(const LoadServers());
+      final server = await _database.getServerById(event.serverId);
+      if (server == null) {
+        emit(state.copyWith(
+          status: ServerStatus.error,
+          errorMessage: 'Server not found',
+        ));
+        return;
+      }
+
+      // 实际测试 TCP 连接延迟
+      final latency = await _testTcpLatency(server.address, server.port);
+      
+      if (latency > 0) {
+        await _database.updateServerLatency(event.serverId, latency);
+        add(const LoadServers());
+      } else {
+        emit(state.copyWith(
+          status: ServerStatus.error,
+          errorMessage: 'Connection timeout',
+        ));
+      }
     } catch (e) {
       emit(state.copyWith(
         status: ServerStatus.error,
@@ -102,8 +121,10 @@ class ServerBloc extends Bloc<ServerEvent, ServerState> {
 
     try {
       for (final server in state.servers) {
-        final latency = 50 + (DateTime.now().millisecond % 300);
-        await _database.updateServerLatency(server.id, latency);
+        final latency = await _testTcpLatency(server.address, server.port);
+        if (latency > 0) {
+          await _database.updateServerLatency(server.id, latency);
+        }
       }
       add(const LoadServers());
     } catch (e) {
@@ -116,161 +137,30 @@ class ServerBloc extends Bloc<ServerEvent, ServerState> {
     }
   }
 
+  /// 测试 TCP 连接延迟
+  Future<int> _testTcpLatency(String host, int port) async {
+    try {
+      final stopwatch = Stopwatch()..start();
+      final socket = await Socket.connect(host, port, timeout: const Duration(seconds: 5));
+      await socket.close();
+      return stopwatch.elapsedMilliseconds;
+    } catch (e) {
+      return -1;
+    }
+  }
+
   Future<void> _onImportServerConfig(ImportServerConfig event, Emitter<ServerState> emit) async {
     try {
-      final server = _parseConfig(event.config);
-      if (server != null) {
-        add(AddServer(server));
+      final servers = ConfigParserService.parseConfig(event.config);
+      if (servers.isNotEmpty) {
+        for (final server in servers) {
+          await _database.addServer(server);
+        }
+        add(LoadServers());
       }
     } catch (e) {
       emit(state.copyWith(errorMessage: 'Failed to import config: ${e.toString()}'));
     }
   }
 
-  ServerNode? _parseConfig(String config) {
-    final trimmed = config.trim();
-
-    if (trimmed.startsWith('vmess://')) {
-      return _parseVmess(trimmed);
-    } else if (trimmed.startsWith('vless://')) {
-      return _parseVless(trimmed);
-    } else if (trimmed.startsWith('ss://')) {
-      return _parseShadowsocks(trimmed);
-    } else if (trimmed.startsWith('trojan://')) {
-      return _parseTrojan(trimmed);
-    }
-
-    return null;
-  }
-
-  ServerNode? _parseVmess(String config) {
-    try {
-      final jsonStr = config.substring(8);
-      final json = _decodeBase64(jsonStr);
-      final parts = json.split('\n');
-      final Map<String, String> params = {};
-      for (final part in parts) {
-        final idx = part.indexOf('=');
-        if (idx > 0) {
-          params[part.substring(0, idx)] = part.substring(idx + 1);
-        }
-      }
-
-      return ServerNode(
-        id: _uuid.v4(),
-        name: params['ps'] ?? 'VMess Server',
-        address: params['add'] ?? '',
-        port: int.tryParse(params['port'] ?? '0') ?? 0,
-        protocol: ServerProtocol.vmess,
-        uuid: params['id'],
-        alterId: int.tryParse(params['aid'] ?? '0'),
-        security: params['scy'] ?? params['security'],
-        network: params['net'],
-        tls: params['tls'],
-        host: params['host'],
-        path: params['path'],
-        sni: params['sni'],
-        country: _estimateCountry(params['add'] ?? ''),
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
-    } catch (e) {
-      return null;
-    }
-  }
-
-  ServerNode? _parseVless(String config) {
-    try {
-      final uri = Uri.parse(config);
-      return ServerNode(
-        id: _uuid.v4(),
-        name: uri.fragment.isNotEmpty ? uri.fragment : 'VLESS Server',
-        address: uri.host,
-        port: uri.port,
-        protocol: ServerProtocol.vless,
-        uuid: uri.userInfo,
-        tls: 'tls',
-        sni: uri.queryParameters['sni'],
-        country: _estimateCountry(uri.host),
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
-    } catch (e) {
-      return null;
-    }
-  }
-
-  ServerNode? _parseShadowsocks(String config) {
-    try {
-      final uri = Uri.parse(config);
-      final method = uri.userInfo.split(':').first;
-      final password = uri.userInfo.split(':').last;
-      return ServerNode(
-        id: _uuid.v4(),
-        name: uri.fragment.isNotEmpty ? uri.fragment : 'Shadowsocks Server',
-        address: uri.host,
-        port: uri.port,
-        protocol: ServerProtocol.ss,
-        username: method,
-        password: password,
-        country: _estimateCountry(uri.host),
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
-    } catch (e) {
-      return null;
-    }
-  }
-
-  ServerNode? _parseTrojan(String config) {
-    try {
-      final uri = Uri.parse(config);
-      return ServerNode(
-        id: _uuid.v4(),
-        name: uri.fragment.isNotEmpty ? uri.fragment : 'Trojan Server',
-        address: uri.host,
-        port: uri.port,
-        protocol: ServerProtocol.trojan,
-        password: uri.userInfo,
-        sni: uri.queryParameters['sni'],
-        country: _estimateCountry(uri.host),
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
-    } catch (e) {
-      return null;
-    }
-  }
-
-  String _decodeBase64(String input) {
-    final base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-    final padded = input.padRight((input.length / 4).ceil() * 4, '=');
-    final buffer = StringBuffer();
-    for (var i = 0; i < padded.length; i += 4) {
-      final b1 = base64Chars.indexOf(padded[i]);
-      final b2 = base64Chars.indexOf(padded[i + 1]);
-      final b3 = base64Chars.indexOf(padded[i + 2]);
-      final b4 = base64Chars.indexOf(padded[i + 3]);
-      buffer.write(String.fromCharCode((b1 << 2) | (b2 >> 4)));
-      if (b3 != -1 && padded[i + 2] != '=') {
-        buffer.write(String.fromCharCode(((b2 & 0xF) << 4) | (b3 >> 2)));
-      }
-      if (b4 != -1 && padded[i + 3] != '=') {
-        buffer.write(String.fromCharCode(((b3 & 0x3) << 6) | b4));
-      }
-    }
-    return buffer.toString();
-  }
-
-  String _estimateCountry(String address) {
-    if (address.contains('us') || address.contains('usa')) return 'United States';
-    if (address.contains('uk') || address.contains('gb')) return 'United Kingdom';
-    if (address.contains('jp') || address.contains('japan')) return 'Japan';
-    if (address.contains('sg') || address.contains('singapore')) return 'Singapore';
-    if (address.contains('hk') || address.contains('hong')) return 'Hong Kong';
-    if (address.contains('de') || address.contains('germany')) return 'Germany';
-    if (address.contains('fr') || address.contains('france')) return 'France';
-    if (address.contains('au') || address.contains('australia')) return 'Australia';
-    return 'Unknown';
-  }
 }

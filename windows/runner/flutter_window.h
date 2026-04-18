@@ -3,10 +3,13 @@
 
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
+#include <flutter/method_channel.h>
+#include <flutter/event_channel.h>
 
 #include <memory>
 
 #include "win32_window.h"
+#include "vpn_handler.h"
 
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
@@ -28,6 +31,11 @@ class FlutterWindow : public Win32Window {
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+  
+  // VPN Handler
+  void SetupVpnChannels();
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> vpn_method_channel_;
+  std::unique_ptr<flutter::EventChannel<flutter::EncodableValue>> vpn_event_channel_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

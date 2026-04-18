@@ -22,39 +22,57 @@ class LocalDatabase {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    // 获取当前表结构
     final columns = await db.rawQuery('PRAGMA table_info(servers)');
-    final columnNames = columns.map((c) => c['name'] as String).toList();
+    final columnNames = columns.map((c) => c['name'] as String).toSet();
 
-    final newColumns = [
-      ('fingerprint', 'TEXT'),
-      ('verify_hostname', 'INTEGER'),
-      ('public_key', 'TEXT'),
-      ('private_key', 'TEXT'),
-      ('peer_public_key', 'TEXT'),
-      ('preshared_key', 'TEXT'),
-      ('obfs_password', 'TEXT'),
-      ('speed_limit', 'INTEGER'),
-      ('speed_limit_up', 'INTEGER'),
-      ('speed_limit_down', 'INTEGER'),
-      ('auth', 'INTEGER'),
-      ('auth_username', 'TEXT'),
-      ('auth_password', 'TEXT'),
-      ('allow_insecure', 'INTEGER'),
-      ('plugin_opts', 'TEXT'),
-      ('protocol_param', 'TEXT'),
-      ('obfs_param', 'TEXT'),
-      ('public_key1', 'TEXT'),
-      ('short_id', 'TEXT'),
-      ('subscription_url', 'TEXT'),
-      ('subscription_download', 'INTEGER'),
-      ('subscription_upload', 'INTEGER'),
-      ('subscription_total', 'INTEGER'),
-      ('subscription_expire', 'TEXT'),
-    ];
+    // 定义每个版本需要添加的列
+    final versionColumns = <int, List<(String, String)>>{
+      2: [
+        ('fingerprint', 'TEXT'),
+        ('verify_hostname', 'INTEGER'),
+        ('public_key', 'TEXT'),
+        ('private_key', 'TEXT'),
+        ('peer_public_key', 'TEXT'),
+        ('preshared_key', 'TEXT'),
+        ('obfs_password', 'TEXT'),
+        ('speed_limit', 'INTEGER'),
+        ('speed_limit_up', 'INTEGER'),
+        ('speed_limit_down', 'INTEGER'),
+        ('auth', 'INTEGER'),
+        ('auth_username', 'TEXT'),
+        ('auth_password', 'TEXT'),
+        ('allow_insecure', 'INTEGER'),
+        ('plugin_opts', 'TEXT'),
+        ('protocol_param', 'TEXT'),
+        ('obfs_param', 'TEXT'),
+      ],
+      3: [
+        ('public_key1', 'TEXT'),
+        ('short_id', 'TEXT'),
+        ('subscription_url', 'TEXT'),
+        ('subscription_download', 'INTEGER'),
+        ('subscription_upload', 'INTEGER'),
+        ('subscription_total', 'INTEGER'),
+        ('subscription_expire', 'TEXT'),
+      ],
+    };
 
-    for (final (colName, colType) in newColumns) {
-      if (!columnNames.contains(colName)) {
-        await db.execute('ALTER TABLE servers ADD COLUMN $colName $colType');
+    // 按版本号顺序升级
+    for (int version = oldVersion + 1; version <= newVersion; version++) {
+      final colsToAdd = versionColumns[version] ?? [];
+      for (final (colName, colType) in colsToAdd) {
+        if (!columnNames.contains(colName)) {
+          try {
+            await db.execute('ALTER TABLE servers ADD COLUMN $colName $colType');
+            columnNames.add(colName);
+          } catch (e) {
+            // 忽略已存在的列错误
+            if (!e.toString().contains('duplicate column')) {
+              rethrow;
+            }
+          }
+        }
       }
     }
   }

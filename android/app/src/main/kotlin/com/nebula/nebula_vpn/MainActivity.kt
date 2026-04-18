@@ -1,5 +1,213 @@
 package com.nebula.nebula_vpn
 
+import android.content.Intent
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.EventChannel.EventSink
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collect
 
-class MainActivity : FlutterActivity()
+class MainActivity : FlutterActivity() {
+
+    companion object {
+        private const val TAG = "NebulaVPN"
+        private const val METHOD_CHANNEL = "nebula_vpn/method"
+        private const val EVENT_CHANNEL = "nebula_vpn/events"
+        private const val VPN_PERMISSION_REQUEST_CODE = 1001
+    }
+
+    private val methodChannel get() = MethodChannel(flutterEngine!!.dartExecutor.binaryMessenger, METHOD_CHANNEL)
+    private val eventChannel get() = EventChannel(flutterEngine!!.dartExecutor.binaryMessenger, EVENT_CHANNEL)
+    
+    private var eventSink: EventSink? = null
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val handler = Handler(Looper.getMainLooper())
+    
+    // 定期发送统计更新
+    private var statsRunnable: Runnable? = null
+    
+    // 缓存最新的统计数据，用于 handleGetStatus
+    private var cachedStats = mapOf<String, Long>(
+        "uploadSpeed" to 0L,
+        "downloadSpeed" to 0L,
+        "totalUpload" to 0L,
+        "totalDownload" to 0L
+    )
+    
+    // 绑定到 VpnService
+    private var vpnService: VpnService? = null
+    private var serviceBound = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setupPlatformChannels()
+        bindToVpnService()
+    }
+
+    private fun bindToVpnService() {
+        // 尝试获取 VpnService 实例（如果正在运行）
+        // 简化实现：使用 ServiceConnection 绑定
+    }
+
+    private fun setupPlatformChannels() {
+        methodChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "connect" -> handleConnect(call, result)
+                "disconnect" -> handleDisconnect(result)
+                "getStatus" -> handleGetStatus(result)
+                else -> result.notImplemented()
+            }
+        }
+
+        eventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventSink?) {
+                eventSink = events
+                startStatsPolling()
+            }
+
+            override fun onCancel(arguments: Any?) {
+                eventSink = null
+                stopStatsPolling()
+            }
+        })
+    }
+
+    private fun startStatsPolling() {
+        statsRunnable = object : Runnable {
+            override fun run() {
+                vpnService?.let { service ->
+                    val stats = service.getStats()
+                    val state = service.connectionState.value
+                    
+                    // 缓存统计数据
+                    cachedStats = mapOf(
+                        "uploadSpeed" to stats["uploadSpeed"]!!,
+                        "downloadSpeed" to stats["downloadSpeed"]!!,
+                        "totalUpload" to stats["totalUpload"]!!,
+                        "totalDownload" to stats["totalDownload"]!!
+                    )
+                    
+                    // 根据状态发送事件
+                    when (state) {
+                        VpnService.ConnectionState.CONNECTED -> {
+                            sendEvent("connected", mapOf(
+                                "message" to "VPN connected",
+                                "uploadSpeed" to stats["uploadSpeed"]!!,
+                                "downloadSpeed" to stats["downloadSpeed"]!!,
+                                "totalUpload" to stats["totalUpload"]!!,
+                                "totalDownload" to stats["totalDownload"]!!
+                            ))
+                        }
+                        VpnService.ConnectionState.CONNECTING -> {
+                            sendEvent("connecting", mapOf("message" to "Connecting..."))
+                        }
+                        VpnService.ConnectionState.DISCONNECTING -> {
+                            sendEvent("disconnecting", mapOf("message" to "Disconnecting..."))
+                        }
+                        VpnService.ConnectionState.DISCONNECTED -> {
+                            sendEvent("disconnected", mapOf("message" to "VPN disconnected"))
+                            return@let
+                        }
+                        VpnService.ConnectionState.ERROR -> {
+                            sendEvent("error", mapOf("message" to "VPN connection error"))
+                            return@let
+                        }
+                    }
+                }
+                
+                handler.postDelayed(this, 1000)
+            }
+        }
+        handler.post(statsRunnable!!)
+    }
+
+    private fun stopStatsPolling() {
+        statsRunnable?.let { handler.removeCallbacks(it) }
+        statsRunnable = null
+    }
+
+    private fun handleConnect(call: MethodCall, result: MethodChannel.Result) {
+        val config = call.argument<Map<String, Any>>("config")
+        if (config == null) {
+            result.error("INVALID_CONFIG", "Configuration is required", null)
+            return
+        }
+
+        val vpnIntent = VpnService.prepare(this)
+        if (vpnIntent != null) {
+            startActivityForResult(vpnIntent, VPN_PERMISSION_REQUEST_CODE)
+            result.success(true)
+            return
+        }
+
+        val intent = Intent(this, VpnService::class.java).apply {
+            action = VpnService.ACTION_CONNECT
+            putExtra("config", HashMap(config))
+        }
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+
+        Log.i(TAG, "VPN connect initiated")
+        result.success(true)
+    }
+
+    private fun handleDisconnect(result: MethodChannel.Result) {
+        val intent = Intent(this, VpnService::class.java).apply {
+            action = VpnService.ACTION_DISCONNECT
+        }
+        startService(intent)
+
+        Log.i(TAG, "VPN disconnect initiated")
+        result.success(true)
+    }
+
+    private fun handleGetStatus(result: MethodChannel.Result) {
+        // 返回缓存的统计数据和连接状态
+        val isConnected = vpnService?.connectionState?.value == VpnService.ConnectionState.CONNECTED
+        val status = mapOf(
+            "connected" to isConnected,
+            "uploadSpeed" to cachedStats["uploadSpeed"]!!,
+            "downloadSpeed" to cachedStats["downloadSpeed"]!!,
+            "totalUpload" to cachedStats["totalUpload"]!!,
+            "totalDownload" to cachedStats["totalDownload"]!!
+        )
+        
+        result.success(status)
+    }
+
+    private fun sendEvent(type: String, data: Map<String, Any>) {
+        runOnUiThread {
+            eventSink?.success(mapOf("type" to type) + data)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        
+        if (requestCode == VPN_PERMISSION_REQUEST_CODE) {
+            if (resultCode == RESULT_OK) {
+                Log.i(TAG, "VPN permission granted")
+            } else {
+                Log.e(TAG, "VPN permission denied")
+                sendEvent("error", mapOf("message" to "VPN permission denied"))
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        serviceScope.cancel()
+        stopStatsPolling()
+    }
+}

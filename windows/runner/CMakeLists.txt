@@ -38,3 +38,14 @@ target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)
+
+# Copy v2ray-core to output directory
+if(EXISTS "${CMAKE_SOURCE_DIR}/v2ray/v2ray.exe")
+  file(COPY 
+    "${CMAKE_SOURCE_DIR}/v2ray/v2ray.exe"
+    "${CMAKE_SOURCE_DIR}/v2ray/geoip.dat"
+    "${CMAKE_SOURCE_DIR}/v2ray/geosite.dat"
+    DESTINATION "${CMAKE_BINARY_DIR}/runner/v2ray/"
+  )
+  message(STATUS "v2ray-core copied to output directory")
+endif()

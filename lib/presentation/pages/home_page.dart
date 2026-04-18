@@ -4,6 +4,7 @@ import 'package:percent_indicator/circular_percent_indicator.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../core/widgets/sci_fi_widgets.dart';
+import '../../data/datasources/preferences_manager.dart';
 import '../../domain/entities/vpn_connection.dart';
 import '../blocs/vpn/vpn_bloc.dart';
 import '../blocs/vpn/vpn_event.dart';
@@ -54,10 +55,7 @@ class HomePage extends StatelessWidget {
               if (isConnected) {
                 context.read<VpnBloc>().add(const DisconnectVpn());
               } else if (!isConnecting && !isDisconnecting) {
-                final lastServerId = context.read<VpnBloc>().state.connection.serverAddress;
-                if (lastServerId != null) {
-                  context.read<VpnBloc>().add(const ConnectVpn('default'));
-                }
+                context.read<VpnBloc>().add(const ConnectVpn(''));
               }
             },
             child: CircularPercentIndicator(

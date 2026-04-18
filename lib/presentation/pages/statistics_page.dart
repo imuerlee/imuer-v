@@ -125,101 +125,112 @@ class StatisticsPage extends StatelessWidget {
   }
 
   Widget _buildSpeedChart(StatisticsState state) {
-    return SciFiCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
+    return BlocBuilder<VpnBloc, VpnState>(
+      builder: (context, vpnState) {
+        return SciFiCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.show_chart, color: AppColors.primary, size: 20),
-              SizedBox(width: 8),
-              Text(
-                'Speed History',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            height: 200,
-            child: LineChart(
-              LineChartData(
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  horizontalInterval: 10000,
-                  getDrawingHorizontalLine: (value) => FlLine(
-                    color: AppColors.border.withValues(alpha: 0.3),
-                    strokeWidth: 1,
-                  ),
-                ),
-                titlesData: FlTitlesData(
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 50,
-                      getTitlesWidget: (value, meta) {
-                        return Text(
-                          FormatUtils.formatSpeed(value.toInt()),
-                          style: const TextStyle(
-                            color: AppColors.textTertiary,
-                            fontSize: 10,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  bottomTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  topTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  rightTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: _generateMockSpots(),
-                    isCurved: true,
-                    color: AppColors.accentBlue,
-                    barWidth: 3,
-                    isStrokeCapRound: true,
-                    dotData: const FlDotData(show: false),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          AppColors.accentBlue.withValues(alpha: 0.3),
-                          AppColors.accentBlue.withValues(alpha: 0.0),
-                        ],
-                      ),
+              const Row(
+                children: [
+                  Icon(Icons.show_chart, color: AppColors.primary, size: 20),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Speed History',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ],
               ),
-            ),
+              const SizedBox(height: 24),
+              SizedBox(
+                height: 200,
+                child: LineChart(
+                  LineChartData(
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: false,
+                      horizontalInterval: 10000,
+                      getDrawingHorizontalLine: (value) => FlLine(
+                        color: AppColors.border.withValues(alpha: 0.3),
+                        strokeWidth: 1,
+                      ),
+                    ),
+                    titlesData: FlTitlesData(
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 50,
+                          getTitlesWidget: (value, meta) {
+                            return Text(
+                              FormatUtils.formatSpeed(value.toInt()),
+                              style: const TextStyle(
+                                color: AppColors.textTertiary,
+                                fontSize: 10,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      bottomTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                    ),
+                    borderData: FlBorderData(show: false),
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: _buildSpeedSpots(vpnState),
+                        isCurved: true,
+                        color: AppColors.accentBlue,
+                        barWidth: 3,
+                        isStrokeCapRound: true,
+                        dotData: const FlDotData(show: false),
+                        belowBarData: BarAreaData(
+                          show: true,
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              AppColors.accentBlue.withValues(alpha: 0.3),
+                              AppColors.accentBlue.withValues(alpha: 0.0),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  List<FlSpot> _generateMockSpots() {
-    final now = DateTime.now();
-    return List.generate(20, (index) {
-      final downloadSpeed = 10000 + (index * 500) + (now.second % 1000);
-      return FlSpot(index.toDouble(), downloadSpeed.toDouble());
-    });
+  List<FlSpot> _buildSpeedSpots(VpnState state) {
+    final downloadSpeed = state.connection.downloadSpeed ?? 0;
+    final uploadSpeed = state.connection.uploadSpeed ?? 0;
+    
+    if (downloadSpeed == 0 && uploadSpeed == 0) {
+      return [const FlSpot(0, 0)];
+    }
+    
+    // 使用真实速度数据：显示当前总速度（上传 + 下载）
+    // fl_chart 会自动根据数据更新图表，不需要生成额外的点
+    // 真实的速度历史应该由 VpnBloc 每秒推送更新
+    return [FlSpot(0, (downloadSpeed + uploadSpeed).toDouble())];
   }
+
 
   Widget _buildTrafficOverview(StatisticsState state) {
     return SciFiCard(
@@ -320,15 +331,38 @@ class StatisticsPage extends StatelessWidget {
   }
 
   List<BarChartGroupData> _generateBarGroups(List dailyTraffic) {
+    // 如果有真实数据，使用真实数据
+    if (dailyTraffic != null && dailyTraffic.isNotEmpty) {
+      return List.generate(7, (index) {
+        final traffic = dailyTraffic.length > index ? dailyTraffic[index] : null;
+        final bytes = traffic != null 
+            ? (traffic.uploadBytes ?? 0) + (traffic.downloadBytes ?? 0)
+            : 0.0;
+        return BarChartGroupData(
+          x: index,
+          barRods: [
+            BarChartRodData(
+              toY: bytes.toDouble(),
+              gradient: const LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [AppColors.primary, AppColors.secondary],
+              ),
+              width: 16,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+            ),
+          ],
+        );
+      });
+    }
+    
+    // 没有数据时返回空图表
     return List.generate(7, (index) {
-      final bytes = dailyTraffic.length > index
-          ? dailyTraffic[index].uploadBytes + dailyTraffic[index].downloadBytes
-          : index * 100000;
       return BarChartGroupData(
         x: index,
         barRods: [
           BarChartRodData(
-            toY: bytes.toDouble(),
+            toY: 0,
             gradient: const LinearGradient(
               begin: Alignment.bottomCenter,
               end: Alignment.topCenter,
