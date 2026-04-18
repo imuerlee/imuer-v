@@ -131,7 +131,7 @@ class StatisticsPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
                   Icon(Icons.show_chart, color: AppColors.primary, size: 20),
                   const SizedBox(width: 8),
@@ -332,7 +332,7 @@ class StatisticsPage extends StatelessWidget {
 
   List<BarChartGroupData> _generateBarGroups(List dailyTraffic) {
     // 如果有真实数据，使用真实数据
-    if (dailyTraffic != null && dailyTraffic.isNotEmpty) {
+    if (dailyTraffic.isNotEmpty) {
       return List.generate(7, (index) {
         final traffic = dailyTraffic.length > index ? dailyTraffic[index] : null;
         final bytes = traffic != null 

@@ -4,7 +4,6 @@ import 'package:percent_indicator/circular_percent_indicator.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format_utils.dart';
 import '../../core/widgets/sci_fi_widgets.dart';
-import '../../data/datasources/preferences_manager.dart';
 import '../../domain/entities/vpn_connection.dart';
 import '../blocs/vpn/vpn_bloc.dart';
 import '../blocs/vpn/vpn_event.dart';
