@@ -26,16 +26,27 @@ import java.net.InetSocketAddress
 
 class VpnService : VpnService() {
 
-    companion object {
-        private const val TAG = "NebulaVpnService"
-        private const val NOTIFICATION_CHANNEL_ID = "nebula_vpn_channel"
-        private const val NOTIFICATION_ID = 1
-        private const val VPN_ADDRESS = "10.0.0.2"
-        private const val VPN_ADDRESS_V6 = "fd00::2"
-        private const val DNS_SERVER = "8.8.8.8"
-        private const val DNS_SERVER_V6 = "2001:4860:4860::8888"
-        private const val PROXY_PORT = 8200
+    // 供 MainActivity 调用的获取统计方法
+    fun getStats(): Map<String, Long> {
+        return mapOf(
+            "uploadSpeed" to uploadSpeed,
+            "downloadSpeed" to downloadSpeed,
+            "totalUpload" to totalUpload,
+            "totalDownload" to totalDownload
+        )
     }
+
+    // 供 MainActivity 调用的获取统计方法
+    fun getStats(): Map<String, Long> {
+        return mapOf(
+            "uploadSpeed" to uploadSpeed,
+            "downloadSpeed" to downloadSpeed,
+            "totalUpload" to totalUpload,
+            "totalDownload" to totalDownload
+        )
+    }
+}
+}
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
@@ -488,10 +499,5 @@ class VpnService : VpnService() {
             "totalUpload" to totalUpload,
             "totalDownload" to totalDownload
         )
-    }
-
-    companion object {
-        const val ACTION_CONNECT = "com.nebula.nebula_vpn.CONNECT"
-        const val ACTION_DISCONNECT = "com.nebula.nebula_vpn.DISCONNECT"
     }
 }

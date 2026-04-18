@@ -95,17 +95,17 @@ void FlutterWindow::SetupVpnChannels() {
       });
 
   // Set stream handler for event channel
-  vpn_event_channel_->SetStreamHandler(
-      std::make_unique<flutter::StreamHandlerFunctions<>>(
-          [](const flutter::EncodableValue* arguments,
-             std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& events)
-              -> std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> {
-            VpnHandler::Instance().OnListen(arguments, std::move(events));
-            return nullptr;
-          },
-          [](const flutter::EncodableValue* arguments)
-              -> std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> {
-            VpnHandler::Instance().OnCancel(arguments);
-            return nullptr;
-          }));
+  auto stream_handler = std::make_unique<flutter::StreamHandlerFunctions<>>(
+      [](const flutter::EncodableValue* arguments,
+         std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& events)
+          -> std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> {
+        VpnHandler::Instance().OnListen(arguments, std::move(events));
+        return nullptr;
+      },
+      [](const flutter::EncodableValue* arguments)
+          -> std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> {
+        VpnHandler::Instance().OnCancel(arguments);
+        return nullptr;
+      });
+  vpn_event_channel_->SetStreamHandler(std::move(stream_handler));
 }
