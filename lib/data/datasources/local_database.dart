@@ -144,13 +144,19 @@ class LocalDatabase {
     return ServerNodeModel.fromJson(maps.first);
   }
 
-  Future<void> insertServer(ServerNodeModel server) async {
+  Future<bool> insertServer(ServerNodeModel server) async {
     final db = await database;
-    await db.insert(
-      'servers',
-      server.toJson(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    
+    try {
+      final result = await db.insert(
+        'servers',
+        server.toJson(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      return result > 0;
+    } catch (e) {
+      throw Exception('Failed to insert server: $e');
+    }
   }
 
   Future<void> updateServer(ServerNodeModel server) async {

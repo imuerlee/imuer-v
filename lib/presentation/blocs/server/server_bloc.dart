@@ -34,7 +34,7 @@ class ServerBloc extends Bloc<ServerEvent, ServerState> {
     } catch (e) {
       emit(state.copyWith(
         status: ServerStatus.error,
-        errorMessage: e.toString(),
+        errorMessage: 'Database error: ${e.toString()}',
       ));
     }
   }
@@ -42,8 +42,15 @@ class ServerBloc extends Bloc<ServerEvent, ServerState> {
   Future<void> _onAddServer(AddServer event, Emitter<ServerState> emit) async {
     try {
       final model = ServerNodeModel.fromEntity(event.server);
-      await _database.insertServer(model);
-      add(const LoadServers());
+      final success = await _database.insertServer(model);
+      if (success) {
+        add(const LoadServers());
+      } else {
+        emit(state.copyWith(
+          status: ServerStatus.error,
+          errorMessage: 'Failed to insert server into database',
+        ));
+      }
     } catch (e) {
       emit(state.copyWith(
         status: ServerStatus.error,

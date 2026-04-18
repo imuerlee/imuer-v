@@ -32,6 +32,10 @@ class ServersPage extends StatelessWidget {
           );
         }
 
+        if (state.status == ServerStatus.error) {
+          return _buildErrorState(context, state.errorMessage);
+        }
+
         return Column(
           children: [
             _buildHeader(context, state),
@@ -43,6 +47,50 @@ class ServersPage extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildErrorState(BuildContext context, String? errorMessage) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              size: 80,
+              color: AppColors.error,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Failed to Load Servers',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              errorMessage ?? 'Unknown error occurred',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () {
+                context.read<ServerBloc>().add(const LoadServers());
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
