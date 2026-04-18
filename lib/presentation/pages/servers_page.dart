@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import 'dart:io';
 import 'package:uuid/uuid.dart';
 import '../../core/theme/app_theme.dart';
@@ -461,7 +462,29 @@ class ServersPage extends StatelessWidget {
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       if (data?.text != null && data!.text!.isNotEmpty) {
-        final servers = ConfigParserService.parseConfig(data.text!);
+        final text = data.text!.trim();
+        List<ServerNode> servers = [];
+
+        servers = ConfigParserService.parseConfig(text);
+
+        if (servers.isEmpty && text.startsWith('http')) {
+          servers = await _fetchServersFromUrl(text);
+        }
+
+        if (servers.isEmpty) {
+          final normalized = text
+              .replaceAll(RegExp(r'\s+'), '\n')
+              .replaceAll(RegExp(r',+'), '\n');
+          servers = ConfigParserService.parseConfig(normalized);
+        }
+
+        if (servers.isEmpty) {
+          try {
+            final decoded = utf8.decode(base64Decode(text));
+            servers = ConfigParserService.parseConfig(decoded);
+          } catch (_) {}
+        }
+
         if (servers.isNotEmpty) {
           for (final server in servers) {
             context.read<ServerBloc>().add(AddServer(server));
@@ -494,6 +517,18 @@ class ServersPage extends StatelessWidget {
           ),
         );
       }
+    }
+  }
+
+  Future<List<ServerNode>> _fetchServersFromUrl(String url) async {
+    try {
+      final subscriptionService = SubscriptionService(
+        prefs: getIt<SharedPreferences>(),
+      );
+      await subscriptionService.setSubscriptionUrl(url);
+      return await subscriptionService.fetchSubscriptionServers(url);
+    } catch (e) {
+      return [];
     }
   }
 
@@ -590,13 +625,87 @@ class _QRScannerView extends StatefulWidget {
 }
 
 class _QRScannerViewState extends State<_QRScannerView> {
-  final MobileScannerController _controller = MobileScannerController();
+  MobileScannerController? _controller;
   bool _hasScanned = false;
+  bool _isInitializing = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _initController();
+  }
+
+  Future<void> _initController() async {
+    try {
+      _controller = MobileScannerController(
+        detectionSpeed: DetectionSpeed.normal,
+        facing: CameraFacing.back,
+        torchEnabled: false,
+      );
+      if (mounted) {
+        setState(() => _isInitializing = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+          _error = 'Failed to initialize camera';
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
+  }
+
+  void _handleDetection(BarcodeCapture capture) async {
+    if (_hasScanned) return;
+    
+    final List<Barcode> barcodes = capture.barcodes;
+    for (final barcode in barcodes) {
+      if (barcode.rawValue == null) continue;
+      
+      final value = barcode.rawValue!;
+      List<ServerNode> servers = ConfigParserService.parseConfig(value);
+      
+      if (servers.isEmpty && value.startsWith('http')) {
+        try {
+          final subscriptionService = SubscriptionService(
+            prefs: getIt<SharedPreferences>(),
+          );
+          await subscriptionService.setSubscriptionUrl(value);
+          servers = await subscriptionService.fetchSubscriptionServers(value);
+        } catch (_) {}
+      }
+      
+      if (servers.isEmpty) {
+        final normalized = value
+            .replaceAll(RegExp(r'\s+'), '\n')
+            .replaceAll(RegExp(r',+'), '\n');
+        servers = ConfigParserService.parseConfig(normalized);
+      }
+      
+      if (servers.isNotEmpty) {
+        _hasScanned = true;
+        for (final server in servers) {
+          widget.onServerAdded(server);
+        }
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Added ${servers.length} server(s)'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
+        break;
+      }
+    }
   }
 
   @override
@@ -616,9 +725,41 @@ class _QRScannerViewState extends State<_QRScannerView> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.close, color: AppColors.textPrimary),
-                onPressed: () => Navigator.pop(context),
+              Row(
+                children: [
+                  if (_controller != null)
+                    IconButton(
+                      icon: ValueListenableBuilder(
+                        valueListenable: _controller!.torchState,
+                        builder: (context, state, child) {
+                          return Icon(
+                            state == TorchState.on
+                                ? Icons.flash_on
+                                : Icons.flash_off,
+                            color: AppColors.primary,
+                          );
+                        },
+                      ),
+                      onPressed: () => _controller?.toggleTorch(),
+                    ),
+                  if (_controller != null)
+                    IconButton(
+                      icon: ValueListenableBuilder(
+                        valueListenable: _controller!.cameraFacingState,
+                        builder: (context, state, child) {
+                          return const Icon(
+                            Icons.flip_camera_ios,
+                            color: AppColors.primary,
+                          );
+                        },
+                      ),
+                      onPressed: () => _controller?.switchCamera(),
+                    ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: AppColors.textPrimary),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
               ),
             ],
           ),
@@ -626,32 +767,44 @@ class _QRScannerViewState extends State<_QRScannerView> {
         Expanded(
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: MobileScanner(
-              controller: _controller,
-              onDetect: (capture) {
-                if (_hasScanned) return;
-                final List<Barcode> barcodes = capture.barcodes;
-                for (final barcode in barcodes) {
-                  if (barcode.rawValue != null) {
-                    final servers = ConfigParserService.parseConfig(barcode.rawValue!);
-                    if (servers.isNotEmpty) {
-                      _hasScanned = true;
-                      for (final server in servers) {
-                        widget.onServerAdded(server);
-                      }
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Added ${servers.length} server(s)'),
-                          backgroundColor: AppColors.success,
+            child: _isInitializing
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  )
+                : _error != null
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.error, color: AppColors.error, size: 48),
+                            const SizedBox(height: 16),
+                            Text(
+                              _error!,
+                              style: const TextStyle(color: AppColors.textSecondary),
+                            ),
+                          ],
                         ),
-                      );
-                      break;
-                    }
-                  }
-                }
-              },
-            ),
+                      )
+                    : MobileScanner(
+                        controller: _controller,
+                        onDetect: _handleDetection,
+                        errorBuilder: (context, error, child) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.error, color: AppColors.error, size: 48),
+                                const SizedBox(height: 16),
+                                Text(
+                                  error.errorDetails?.message ?? 'Camera error',
+                                  style: const TextStyle(color: AppColors.textSecondary),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
           ),
         ),
         const Padding(
@@ -679,13 +832,35 @@ class _SubscriptionView extends StatefulWidget {
 }
 
 class _SubscriptionViewState extends State<_SubscriptionView> {
+  final _nameController = TextEditingController();
   final _urlController = TextEditingController();
   bool _isLoading = false;
+  bool _isPreviewMode = false;
   String? _error;
   SubscriptionInfo? _info;
+  List<ServerNode> _previewServers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedSubscription();
+  }
+
+  Future<void> _loadSavedSubscription() async {
+    final subscriptionService = SubscriptionService(prefs: getIt<SharedPreferences>());
+    final savedUrl = await subscriptionService.getSubscriptionUrl();
+    final savedName = await subscriptionService.getSubscriptionName();
+    if (savedUrl != null && mounted) {
+      setState(() {
+        _urlController.text = savedUrl;
+        _nameController.text = savedName ?? '';
+      });
+    }
+  }
 
   @override
   void dispose() {
+    _nameController.dispose();
     _urlController.dispose();
     super.dispose();
   }
@@ -707,26 +882,23 @@ class _SubscriptionViewState extends State<_SubscriptionView> {
       );
       
       await subscriptionService.setSubscriptionUrl(_urlController.text);
+      if (_nameController.text.isNotEmpty) {
+        await subscriptionService.setSubscriptionName(_nameController.text);
+      }
       final servers = await subscriptionService.fetchSubscriptionServers(_urlController.text);
+      _info = await subscriptionService.getSubscriptionInfo(_urlController.text);
       
-      setState(() {
-        _isLoading = false;
-        _info = null;
-      });
-
       if (servers.isNotEmpty) {
-        widget.onServersImported(servers);
-        if (mounted) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Imported ${servers.length} servers'),
-              backgroundColor: AppColors.success,
-            ),
-          );
-        }
+        setState(() {
+          _previewServers = servers;
+          _isPreviewMode = true;
+          _isLoading = false;
+        });
       } else {
-        setState(() => _error = 'No servers found in subscription');
+        setState(() {
+          _isLoading = false;
+          _error = 'No servers found in subscription';
+        });
       }
     } catch (e) {
       setState(() {
@@ -736,8 +908,33 @@ class _SubscriptionViewState extends State<_SubscriptionView> {
     }
   }
 
+  void _confirmImport() {
+    widget.onServersImported(_previewServers);
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Imported ${_previewServers.length} servers'),
+        backgroundColor: AppColors.success,
+      ),
+    );
+  }
+
+  void _backToForm() {
+    setState(() {
+      _isPreviewMode = false;
+      _previewServers = [];
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isPreviewMode) {
+      return _buildPreviewMode();
+    }
+    return _buildFormMode();
+  }
+
+  Widget _buildPreviewMode() {
     return Padding(
       padding: EdgeInsets.only(
         left: 24,
@@ -749,35 +946,33 @@ class _SubscriptionViewState extends State<_SubscriptionView> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Subscription',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Preview',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                onPressed: _backToForm,
+              ),
+            ],
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Import servers from a subscription URL',
-            style: TextStyle(
+          Text(
+            'Found ${_previewServers.length} servers',
+            style: const TextStyle(
               color: AppColors.textSecondary,
               fontSize: 14,
             ),
           ),
-          const SizedBox(height: 24),
-          TextField(
-            controller: _urlController,
-            style: const TextStyle(color: AppColors.textPrimary),
-            decoration: InputDecoration(
-              labelText: 'Subscription URL',
-              hintText: 'https://example.com/subscription',
-              prefixIcon: const Icon(Icons.link, color: AppColors.primary),
-              errorText: _error,
-            ),
-          ),
           if (_info != null) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -790,22 +985,164 @@ class _SubscriptionViewState extends State<_SubscriptionView> {
                   if (_info!.total != null)
                     Text(
                       'Total: ${_formatBytes(_info!.total!)}',
-                      style: const TextStyle(color: AppColors.textSecondary),
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                     ),
                   if (_info!.remaining != null)
                     Text(
                       'Remaining: ${_formatBytes(_info!.remaining!)}',
-                      style: const TextStyle(color: AppColors.textSecondary),
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                     ),
                   if (_info!.expire != null)
                     Text(
                       'Expires: ${_info!.expire!.toLocal()}',
-                      style: const TextStyle(color: AppColors.textSecondary),
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                     ),
                 ],
               ),
             ),
           ],
+          const SizedBox(height: 16),
+          Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.4,
+            ),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _previewServers.length,
+              itemBuilder: (context, index) {
+                final server = _previewServers[index];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Center(
+                          child: Text(
+                            server.protocol.name.substring(0, 2).toUpperCase(),
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              server.name,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              '${server.address}:${server.port}',
+                              style: const TextStyle(
+                                color: AppColors.textTertiary,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _confirmImport,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: Text('Import ${_previewServers.length} Servers'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFormMode() {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Subscription',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, color: AppColors.textPrimary),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Import servers from a subscription URL',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 24),
+          TextField(
+            controller: _nameController,
+            style: const TextStyle(color: AppColors.textPrimary),
+            decoration: const InputDecoration(
+              labelText: 'Subscription Name (optional)',
+              hintText: 'My Subscription',
+              prefixIcon: Icon(Icons.bookmark, color: AppColors.primary),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _urlController,
+            style: const TextStyle(color: AppColors.textPrimary),
+            decoration: InputDecoration(
+              labelText: 'Subscription URL',
+              hintText: 'https://example.com/subscription',
+              prefixIcon: const Icon(Icons.link, color: AppColors.primary),
+              errorText: _error,
+            ),
+          ),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
@@ -873,13 +1210,16 @@ class _AddServerFormState extends State<_AddServerForm> {
   final _authPasswordController = TextEditingController();
   final _speedUpController = TextEditingController();
   final _speedDownController = TextEditingController();
+  final _serviceNameController = TextEditingController();
+  final _localAddressController = TextEditingController();
+  final _dnsController = TextEditingController();
+  final _endpointController = TextEditingController();
 
   ServerProtocol _protocol = ServerProtocol.vmess;
   String _network = 'tcp';
-  String _tls = 'none';
+  String _security = 'tls';
   bool _auth = false;
   bool _allowInsecure = false;
-  bool _verifyHostname = true;
 
   @override
   void dispose() {
@@ -909,6 +1249,10 @@ class _AddServerFormState extends State<_AddServerForm> {
     _authPasswordController.dispose();
     _speedUpController.dispose();
     _speedDownController.dispose();
+    _serviceNameController.dispose();
+    _localAddressController.dispose();
+    _dnsController.dispose();
+    _endpointController.dispose();
     super.dispose();
   }
 
@@ -945,17 +1289,16 @@ class _AddServerFormState extends State<_AddServerForm> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                _buildSectionTitle('Basic Info'),
+                _buildProtocolSelector(),
+                const SizedBox(height: 20),
+                _buildSectionTitle('Basic'),
                 _buildTextField(
                   controller: _nameController,
-                  label: 'Server Name',
-                  hint: 'My Server',
+                  label: 'Remark',
+                  hint: 'Server remark',
                   validator: (v) => v!.isEmpty ? 'Required' : null,
                 ),
-                const SizedBox(height: 16),
-                _buildProtocolSelector(),
-                const SizedBox(height: 24),
-                _buildSectionTitle('Connection'),
+                const SizedBox(height: 12),
                 _buildTextField(
                   controller: _addressController,
                   label: 'Address',
@@ -970,13 +1313,12 @@ class _AddServerFormState extends State<_AddServerForm> {
                   keyboardType: TextInputType.number,
                   validator: (v) => v!.isEmpty ? 'Required' : null,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
                 ..._buildProtocolFields(),
-                const SizedBox(height: 24),
-                _buildSectionTitle('TLS Settings'),
-                _buildTLSFields(),
-                const SizedBox(height: 24),
-                ..._buildProtocolSpecificFields(),
+                const SizedBox(height: 20),
+                _buildNetworkSection(),
+                const SizedBox(height: 20),
+                _buildSecuritySection(),
                 const SizedBox(height: 32),
                 SizedBox(
                   width: double.infinity,
@@ -1018,6 +1360,7 @@ class _AddServerFormState extends State<_AddServerForm> {
     TextInputType? keyboardType,
     String? Function(String?)? validator,
     bool obscure = false,
+    int maxLines = 1,
   }) {
     return TextFormField(
       controller: controller,
@@ -1025,6 +1368,7 @@ class _AddServerFormState extends State<_AddServerForm> {
       validator: validator,
       obscureText: obscure,
       style: const TextStyle(color: AppColors.textPrimary),
+      maxLines: maxLines,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
@@ -1074,8 +1418,8 @@ class _AddServerFormState extends State<_AddServerForm> {
   List<Widget> _buildProtocolFields() {
     switch (_protocol) {
       case ServerProtocol.vmess:
-      case ServerProtocol.vless:
         return [
+          _buildSectionTitle('VMess'),
           _buildTextField(
             controller: _uuidController,
             label: 'UUID',
@@ -1083,98 +1427,150 @@ class _AddServerFormState extends State<_AddServerForm> {
             validator: (v) => v!.isEmpty ? 'Required' : null,
           ),
           const SizedBox(height: 12),
-          if (_protocol == ServerProtocol.vmess)
-            _buildTextField(
-              controller: _methodController,
-              label: 'Security (auto if empty)',
-              hint: 'aes-128-gcm',
-            ),
+          _buildDropdownField(
+            label: 'Security',
+            value: _methodController.text.isEmpty ? 'auto' : _methodController.text,
+            items: ['auto', 'aes-128-gcm', 'chacha20-poly1305', 'aes-128-ctr', 'aes-256-ctr'],
+            onChanged: (v) => _methodController.text = v ?? 'auto',
+          ),
+        ];
+      case ServerProtocol.vless:
+        return [
+          _buildSectionTitle('VLESS'),
+          _buildTextField(
+            controller: _uuidController,
+            label: 'UUID',
+            hint: 'Enter UUID',
+            validator: (v) => v!.isEmpty ? 'Required' : null,
+          ),
+          const SizedBox(height: 12),
+          _buildDropdownField(
+            label: 'Flow',
+            value: _flowController.text.isEmpty ? 'none' : _flowController.text,
+            items: ['none', 'xtls-rprx-vision', 'xtls-rprx-direct', 'xtls-rprx-origin'],
+            onChanged: (v) => _flowController.text = v ?? 'none',
+          ),
         ];
       case ServerProtocol.ss:
         return [
+          _buildSectionTitle('Shadowsocks'),
           _buildTextField(
             controller: _passwordController,
             label: 'Password',
             hint: 'Encryption Password',
+            validator: (v) => v!.isEmpty ? 'Required' : null,
           ),
           const SizedBox(height: 12),
-          _buildTextField(
-            controller: _methodController,
+          _buildDropdownField(
             label: 'Method',
-            hint: 'chacha20-ietf-poly1305',
+            value: _methodController.text.isEmpty ? 'chacha20-ietf-poly1305' : _methodController.text,
+            items: ['chacha20-ietf-poly1305', 'aes-256-gcm', 'aes-128-gcm', 'aes-256-ctr', 'aes-128-ctr'],
+            onChanged: (v) => _methodController.text = v ?? 'chacha20-ietf-poly1305',
           ),
           const SizedBox(height: 12),
           _buildTextField(
             controller: _pluginController,
-            label: 'Plugin (optional)',
-            hint: 'v2ray-plugin',
+            label: 'Plugin',
+            hint: 'v2ray-plugin (optional)',
           ),
-          const SizedBox(height: 12),
-          _buildTextField(
-            controller: _pluginOptsController,
-            label: 'Plugin Options (optional)',
-            hint: 'tls',
-          ),
+          if (_pluginController.text.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildTextField(
+              controller: _pluginOptsController,
+              label: 'Plugin Options',
+              hint: 'host=example.com;tls',
+            ),
+          ],
         ];
       case ServerProtocol.ssr:
         return [
+          _buildSectionTitle('ShadowsocksR'),
           _buildTextField(
             controller: _passwordController,
             label: 'Password',
             hint: 'SSR Password',
+            validator: (v) => v!.isEmpty ? 'Required' : null,
           ),
           const SizedBox(height: 12),
-          _buildTextField(
-            controller: _methodController,
+          _buildDropdownField(
             label: 'Method',
-            hint: 'chacha20-ietf-poly1305',
+            value: _methodController.text.isEmpty ? 'chacha20-ietf-poly1305' : _methodController.text,
+            items: ['chacha20-ietf-poly1305', 'aes-256-gcm', 'aes-128-gcm', 'aes-256-ctr', 'aes-128-ctr'],
+            onChanged: (v) => _methodController.text = v ?? 'chacha20-ietf-poly1305',
           ),
           const SizedBox(height: 12),
-          _buildTextField(
-            controller: _protocolParamController,
-            label: 'Protocol Param',
-            hint: 'param',
+          _buildDropdownField(
+            label: 'Protocol',
+            value: _protocolParamController.text.isEmpty ? 'origin' : _protocolParamController.text.split(':').first,
+            items: ['origin', 'auth_sha1_v2', 'auth_sha1_v4', 'auth_aes128_sha1', 'auth_aes128_md5'],
+            onChanged: (v) {
+              final current = _protocolParamController.text.contains(':') 
+                  ? _protocolParamController.text.split(':').skip(1).join(':')
+                  : '';
+              _protocolParamController.text = '$v:$current';
+            },
           ),
           const SizedBox(height: 12),
-          _buildTextField(
-            controller: _obfsController,
+          _buildDropdownField(
             label: 'OBFS',
-            hint: 'plain',
+            value: _obfsController.text.isEmpty ? 'plain' : _obfsController.text,
+            items: ['plain', 'http_simple', 'http_post', 'tls1.2_ticket_auth', 'tls1.2_ticket_fastauth'],
+            onChanged: (v) => _obfsController.text = v ?? 'plain',
           ),
           const SizedBox(height: 12),
           _buildTextField(
             controller: _obfsPasswordController,
             label: 'OBFS Password',
-            hint: 'obfs password',
+            hint: 'OBFS password (optional)',
           ),
         ];
       case ServerProtocol.trojan:
         return [
+          _buildSectionTitle('Trojan'),
           _buildTextField(
             controller: _passwordController,
             label: 'Password',
             hint: 'Trojan Password',
             validator: (v) => v!.isEmpty ? 'Required' : null,
           ),
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: _sniController,
+            label: 'SNI',
+            hint: 'example.com',
+          ),
         ];
       case ServerProtocol.wireguard:
         return [
+          _buildSectionTitle('WireGuard'),
           _buildTextField(
             controller: _privateKeyController,
             label: 'Private Key',
-            hint: 'WireGuard Private Key',
+            hint: 'Local private key',
           ),
           const SizedBox(height: 12),
           _buildTextField(
-            controller: _addressController,
-            label: 'Address',
-            hint: '10.0.0.1/24',
+            controller: _localAddressController,
+            label: 'Local Address',
+            hint: '10.0.0.2/32',
           ),
           const SizedBox(height: 12),
           _buildTextField(
             controller: _peerPublicKeyController,
             label: 'Peer Public Key',
-            hint: 'Server Public Key',
+            hint: 'Server public key',
+          ),
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: _dnsController,
+            label: 'DNS',
+            hint: '1.1.1.1',
+          ),
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: _endpointController,
+            label: 'Endpoint',
+            hint: 'example.com:51820',
           ),
           const SizedBox(height: 12),
           _buildTextField(
@@ -1185,19 +1581,19 @@ class _AddServerFormState extends State<_AddServerForm> {
           ),
         ];
       case ServerProtocol.hysteria:
-      case ServerProtocol.hysteria2:
         return [
+          _buildSectionTitle('Hysteria'),
           _buildTextField(
             controller: _passwordController,
-            label: 'Password',
-            hint: 'Hysteria Password',
+            label: 'Auth String',
+            hint: 'Password',
             validator: (v) => v!.isEmpty ? 'Required' : null,
           ),
           const SizedBox(height: 12),
           _buildTextField(
             controller: _obfsPasswordController,
-            label: 'OBFS Password (optional)',
-            hint: 'OBFS password',
+            label: 'OBFS Password',
+            hint: 'OBFS password (optional)',
           ),
           const SizedBox(height: 12),
           Row(
@@ -1205,7 +1601,7 @@ class _AddServerFormState extends State<_AddServerForm> {
               Expanded(
                 child: _buildTextField(
                   controller: _speedUpController,
-                  label: 'Speed Limit Up (Mbps)',
+                  label: 'Up (Mbps)',
                   hint: '100',
                   keyboardType: TextInputType.number,
                 ),
@@ -1214,7 +1610,45 @@ class _AddServerFormState extends State<_AddServerForm> {
               Expanded(
                 child: _buildTextField(
                   controller: _speedDownController,
-                  label: 'Speed Limit Down (Mbps)',
+                  label: 'Down (Mbps)',
+                  hint: '100',
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+            ],
+          ),
+        ];
+      case ServerProtocol.hysteria2:
+        return [
+          _buildSectionTitle('Hysteria2'),
+          _buildTextField(
+            controller: _passwordController,
+            label: 'Password',
+            hint: 'Hysteria2 password',
+            validator: (v) => v!.isEmpty ? 'Required' : null,
+          ),
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: _obfsPasswordController,
+            label: 'OBFS Password',
+            hint: 'OBFS password (optional)',
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildTextField(
+                  controller: _speedUpController,
+                  label: 'Up (Mbps)',
+                  hint: '100',
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTextField(
+                  controller: _speedDownController,
+                  label: 'Down (Mbps)',
                   hint: '100',
                   keyboardType: TextInputType.number,
                 ),
@@ -1223,14 +1657,41 @@ class _AddServerFormState extends State<_AddServerForm> {
           ),
         ];
       case ServerProtocol.http:
-      case ServerProtocol.socks5:
         return [
+          _buildSectionTitle('HTTP'),
           Row(
             children: [
-              const Text(
-                'Authentication',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+              const Text('Authentication', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+              const SizedBox(width: 8),
+              Switch(
+                value: _auth,
+                onChanged: (v) => setState(() => _auth = v),
+                activeThumbColor: AppColors.primary,
               ),
+            ],
+          ),
+          if (_auth) ...[
+            const SizedBox(height: 12),
+            _buildTextField(
+              controller: _authUsernameController,
+              label: 'Username',
+              hint: 'username',
+            ),
+            const SizedBox(height: 12),
+            _buildTextField(
+              controller: _authPasswordController,
+              label: 'Password',
+              hint: 'password',
+              obscure: true,
+            ),
+          ],
+        ];
+      case ServerProtocol.socks5:
+        return [
+          _buildSectionTitle('SOCKS5'),
+          Row(
+            children: [
+              const Text('Authentication', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
               const SizedBox(width: 8),
               Switch(
                 value: _auth,
@@ -1258,52 +1719,110 @@ class _AddServerFormState extends State<_AddServerForm> {
     }
   }
 
-  Widget _buildTLSFields() {
+  Widget _buildNetworkSection() {
+    if (_protocol == ServerProtocol.wireguard ||
+        _protocol == ServerProtocol.hysteria ||
+        _protocol == ServerProtocol.hysteria2 ||
+        _protocol == ServerProtocol.http ||
+        _protocol == ServerProtocol.socks5) {
+      return const SizedBox.shrink();
+    }
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (_protocol != ServerProtocol.wireguard &&
-            _protocol != ServerProtocol.hysteria &&
-            _protocol != ServerProtocol.hysteria2) ...[
-          _buildTextField(
-            controller: _sniController,
-            label: 'SNI / Peer',
-            hint: 'example.com',
-          ),
+        _buildSectionTitle('Transport'),
+        _buildDropdownField(
+          label: 'Network',
+          value: _network,
+          items: ['tcp', 'ws', 'grpc'],
+          onChanged: (v) => setState(() => _network = v ?? 'tcp'),
+        ),
+        if (_network == 'ws') ...[
           const SizedBox(height: 12),
           _buildTextField(
             controller: _hostController,
-            label: 'Host Header',
+            label: 'Host',
             hint: 'example.com',
           ),
           const SizedBox(height: 12),
           _buildTextField(
             controller: _pathController,
-            label: 'Path (optional)',
+            label: 'Path',
             hint: '/path',
+          ),
+        ],
+        if (_network == 'grpc') ...[
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: _serviceNameController,
+            label: 'Service Name',
+            hint: 'grpc_service_name',
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSecuritySection() {
+    if (_protocol == ServerProtocol.wireguard ||
+        _protocol == ServerProtocol.hysteria ||
+        _protocol == ServerProtocol.hysteria2 ||
+        _protocol == ServerProtocol.http ||
+        _protocol == ServerProtocol.socks5) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle('Security'),
+        if (_protocol == ServerProtocol.vmess) ...[
+          _buildDropdownField(
+            label: 'Security',
+            value: _security,
+            items: ['tls', 'none'],
+            onChanged: (v) => setState(() => _security = v ?? 'tls'),
+          ),
+        ],
+        if (_protocol == ServerProtocol.vless) ...[
+          _buildDropdownField(
+            label: 'Security',
+            value: _security,
+            items: ['tls', 'reality'],
+            onChanged: (v) => setState(() => _security = v ?? 'tls'),
+          ),
+        ],
+        if (_protocol == ServerProtocol.trojan) ...[
+          _buildTextField(
+            controller: _sniController,
+            label: 'SNI',
+            hint: 'example.com',
+          ),
+        ],
+        if ((_security == 'tls' || _protocol == ServerProtocol.vmess || _protocol == ServerProtocol.trojan) && _protocol != ServerProtocol.ss) ...[
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: _sniController,
+            label: 'SNI',
+            hint: 'example.com',
           ),
           const SizedBox(height: 12),
           _buildTextField(
             controller: _alpnController,
-            label: 'ALPN (optional)',
+            label: 'ALPN',
             hint: 'h2,http/1.1',
           ),
           const SizedBox(height: 12),
-        ],
-        if (_protocol == ServerProtocol.vless ||
-            _protocol == ServerProtocol.trojan ||
-            _protocol == ServerProtocol.vmess) ...[
           _buildTextField(
             controller: _fingerprintController,
             label: 'Fingerprint',
-            hint: 'chrome',
+            hint: 'chrome (optional)',
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              const Text(
-                'Allow Insecure',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-              ),
+              const Text('Allow Insecure', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
               const SizedBox(width: 8),
               Switch(
                 value: _allowInsecure,
@@ -1313,32 +1832,44 @@ class _AddServerFormState extends State<_AddServerForm> {
             ],
           ),
         ],
-        if (_protocol == ServerProtocol.vless) ...[
-          const SizedBox(height: 12),
-          _buildTextField(
-            controller: _flowController,
-            label: 'Flow',
-            hint: 'xtls-rprx-direct',
-          ),
+        if (_protocol == ServerProtocol.vless && _security == 'reality') ...[
           const SizedBox(height: 12),
           _buildTextField(
             controller: _publicKeyController,
-            label: 'Public Key (Reality)',
-            hint: 'public key',
+            label: 'Public Key',
+            hint: 'Reality public key',
+            validator: (v) => v!.isEmpty ? 'Required' : null,
           ),
           const SizedBox(height: 12),
           _buildTextField(
             controller: _reservedController,
-            label: 'Short ID (Reality)',
-            hint: 'short id',
+            label: 'Short ID',
+            hint: 'Optional',
           ),
         ],
       ],
     );
   }
 
-  List<Widget> _buildProtocolSpecificFields() {
-    return [];
+  Widget _buildDropdownField({
+    required String label,
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      value: items.contains(value) ? value : items.first,
+      decoration: InputDecoration(
+        labelText: label,
+      ),
+      dropdownColor: AppColors.surfaceLight,
+      style: const TextStyle(color: AppColors.textPrimary),
+      items: items.map((item) => DropdownMenuItem(
+        value: item,
+        child: Text(item),
+      )).toList(),
+      onChanged: onChanged,
+    );
   }
 
   void _submit() {
@@ -1357,7 +1888,7 @@ class _AddServerFormState extends State<_AddServerForm> {
         host: _hostController.text.isNotEmpty ? _hostController.text : null,
         alpn: _alpnController.text.isNotEmpty ? _alpnController.text : null,
         fingerprint: _fingerprintController.text.isNotEmpty ? _fingerprintController.text : null,
-        flow: _flowController.text.isNotEmpty ? _flowController.text : null,
+        flow: _flowController.text.isNotEmpty && _flowController.text != 'none' ? _flowController.text : null,
         publicKey1: _publicKeyController.text.isNotEmpty ? _publicKeyController.text : null,
         privateKey: _privateKeyController.text.isNotEmpty ? _privateKeyController.text : null,
         peerPublicKey: _peerPublicKeyController.text.isNotEmpty ? _peerPublicKeyController.text : null,
@@ -1374,6 +1905,8 @@ class _AddServerFormState extends State<_AddServerForm> {
         allowInsecure: _allowInsecure ? true : null,
         speedLimitUp: int.tryParse(_speedUpController.text),
         speedLimitDown: int.tryParse(_speedDownController.text),
+        network: _network,
+        tls: _security == 'none' ? 'none' : _security,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );

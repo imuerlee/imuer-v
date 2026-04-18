@@ -23,4 +23,13 @@ class AppConstants {
   static const String prefSelectedServer = 'selected_server';
   static const String prefTotalUpload = 'total_upload';
   static const String prefTotalDownload = 'total_download';
+  static const String prefCustomDns = 'custom_dns';
+  static const String prefDnsFallback = 'dns_fallback';
+  static const String prefEnableDns = 'enable_dns';
+  static const String prefIpv6Support = 'ipv6_support';
+  static const String prefMuxEnabled = 'mux_enabled';
+  static const String prefMuxCount = 'mux_count';
+  static const String prefRoutingMode = 'routing_mode';
+  static const String prefBypassLan = 'bypass_lan';
+  static const String prefDebugMode = 'debug_mode';
 }

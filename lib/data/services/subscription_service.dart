@@ -6,6 +6,7 @@ import 'config_parser_service.dart';
 
 class SubscriptionService {
   static const String _subscriptionUrlKey = 'subscription_url';
+  static const String _subscriptionNameKey = 'subscription_name';
   static const String _subscriptionServersKey = 'subscription_servers';
 
   final Dio _dio;
@@ -25,8 +26,17 @@ class SubscriptionService {
     await _prefs.setString(_subscriptionUrlKey, url);
   }
 
+  Future<String?> getSubscriptionName() async {
+    return _prefs.getString(_subscriptionNameKey);
+  }
+
+  Future<void> setSubscriptionName(String name) async {
+    await _prefs.setString(_subscriptionNameKey, name);
+  }
+
   Future<void> clearSubscriptionUrl() async {
     await _prefs.remove(_subscriptionUrlKey);
+    await _prefs.remove(_subscriptionNameKey);
   }
 
   Future<List<ServerNode>> fetchSubscriptionServers(String? customUrl) async {

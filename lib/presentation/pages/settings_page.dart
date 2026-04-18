@@ -31,6 +31,10 @@ class SettingsPage extends StatelessWidget {
               const SizedBox(height: 24),
               _buildNetworkSettings(context, state),
               const SizedBox(height: 24),
+              _buildRoutingSettings(context, state),
+              const SizedBox(height: 24),
+              _buildAdvancedSettings(context, state),
+              const SizedBox(height: 24),
               _buildAboutSection(),
             ],
           ),
@@ -108,24 +112,102 @@ class SettingsPage extends StatelessWidget {
         children: [
           _buildSectionTitle('Network', Icons.wifi_outlined),
           const SizedBox(height: 16),
-          _buildInfoTile(
-            title: 'Custom DNS',
-            subtitle: state.customDns,
-            trailing: const Icon(
-              Icons.chevron_right,
-              color: AppColors.textTertiary,
+          _buildSwitchTile(
+            title: 'Enable DNS',
+            subtitle: 'Use custom DNS configuration',
+            value: state.enableDns,
+            onChanged: (value) {
+              context.read<SettingsBloc>().add(ToggleEnableDns(value));
+            },
+          ),
+          if (state.enableDns) ...[
+            const Divider(color: AppColors.border, height: 24),
+            _buildInfoTile(
+              title: 'Primary DNS',
+              subtitle: state.customDns,
+              trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+              onTap: () => _showDnsDialog(context, state.customDns, true),
             ),
-            onTap: () => _showDnsDialog(context, state.customDns),
+            const Divider(color: AppColors.border, height: 24),
+            _buildInfoTile(
+              title: 'Secondary DNS',
+              subtitle: state.dnsFallback,
+              trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+              onTap: () => _showDnsDialog(context, state.dnsFallback, false),
+            ),
+          ],
+          const Divider(color: AppColors.border, height: 24),
+          _buildSwitchTile(
+            title: 'IPv6 Support',
+            subtitle: 'Enable IPv6 routing',
+            value: state.ipv6Support,
+            onChanged: (value) {
+              context.read<SettingsBloc>().add(ToggleIpv6Support(value));
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoutingSettings(BuildContext context, SettingsState state) {
+    return SciFiCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle('Routing', Icons.route_outlined),
+          const SizedBox(height: 16),
+          _buildDropdownTile(
+            title: 'Routing Mode',
+            value: _getRoutingModeName(state.routingMode),
+            onTap: () => _showRoutingModeDialog(context, state.routingMode),
           ),
           const Divider(color: AppColors.border, height: 24),
-          _buildInfoTile(
-            title: 'DNS Fallback',
-            subtitle: '1.1.1.1',
-            trailing: const Icon(
-              Icons.chevron_right,
-              color: AppColors.textTertiary,
+          _buildSwitchTile(
+            title: 'Bypass LAN',
+            subtitle: "Don't proxy local network",
+            value: state.bypassLan,
+            onChanged: (value) {
+              context.read<SettingsBloc>().add(ToggleBypassLan(value));
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdvancedSettings(BuildContext context, SettingsState state) {
+    return SciFiCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle('Advanced', Icons.tune_outlined),
+          const SizedBox(height: 16),
+          _buildSwitchTile(
+            title: 'Multiplexing (MUX)',
+            subtitle: 'Enable connection multiplexing',
+            value: state.muxEnabled,
+            onChanged: (value) {
+              context.read<SettingsBloc>().add(ToggleMux(value));
+            },
+          ),
+          if (state.muxEnabled) ...[
+            const Divider(color: AppColors.border, height: 24),
+            _buildInfoTile(
+              title: 'MUX Count',
+              subtitle: '${state.muxCount} concurrent streams',
+              trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+              onTap: () => _showMuxCountDialog(context, state.muxCount),
             ),
-            onTap: () {},
+          ],
+          const Divider(color: AppColors.border, height: 24),
+          _buildSwitchTile(
+            title: 'Debug Mode',
+            subtitle: 'Enable debug logging',
+            value: state.debugMode,
+            onChanged: (value) {
+              context.read<SettingsBloc>().add(ToggleDebugMode(value));
+            },
           ),
         ],
       ),
@@ -148,30 +230,21 @@ class SettingsPage extends StatelessWidget {
           _buildInfoTile(
             title: 'Licenses',
             subtitle: 'Open source licenses',
-            trailing: const Icon(
-              Icons.chevron_right,
-              color: AppColors.textTertiary,
-            ),
+            trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
             onTap: () {},
           ),
           const Divider(color: AppColors.border, height: 24),
           _buildInfoTile(
             title: 'Privacy Policy',
             subtitle: 'View privacy policy',
-            trailing: const Icon(
-              Icons.chevron_right,
-              color: AppColors.textTertiary,
-            ),
+            trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
             onTap: () {},
           ),
           const Divider(color: AppColors.border, height: 24),
           _buildInfoTile(
             title: 'Logs',
             subtitle: 'View connection logs',
-            trailing: const Icon(
-              Icons.chevron_right,
-              color: AppColors.textTertiary,
-            ),
+            trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
             onTap: () {},
           ),
         ],
@@ -281,16 +354,68 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  void _showDnsDialog(BuildContext context, String currentDns) {
+  Widget _buildDropdownTile({
+    required String title,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getRoutingModeName(RoutingMode mode) {
+    switch (mode) {
+      case RoutingMode.geographic:
+        return 'Geographic Routing';
+      case RoutingMode.bypassLan:
+        return 'Bypass LAN';
+      case RoutingMode.global:
+        return 'Global Proxy';
+    }
+  }
+
+  void _showDnsDialog(BuildContext context, String currentDns, bool isPrimary) {
     final controller = TextEditingController(text: currentDns);
 
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.surface,
-        title: const Text(
-          'Custom DNS',
-          style: TextStyle(color: AppColors.textPrimary),
+        title: Text(
+          isPrimary ? 'Primary DNS' : 'Secondary DNS',
+          style: const TextStyle(color: AppColors.textPrimary),
         ),
         content: TextField(
           controller: controller,
@@ -306,7 +431,81 @@ class SettingsPage extends StatelessWidget {
           ),
           ElevatedButton(
             onPressed: () {
-              context.read<SettingsBloc>().add(UpdateDns(controller.text));
+              if (isPrimary) {
+                context.read<SettingsBloc>().add(UpdateDns(controller.text));
+              } else {
+                context.read<SettingsBloc>().add(UpdateDnsFallback(controller.text));
+              }
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRoutingModeDialog(BuildContext context, RoutingMode currentMode) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text(
+          'Routing Mode',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: RoutingMode.values.map((mode) {
+            return RadioListTile<RoutingMode>(
+              title: Text(
+                _getRoutingModeName(mode),
+                style: const TextStyle(color: AppColors.textPrimary),
+              ),
+              value: mode,
+              groupValue: currentMode,
+              activeColor: AppColors.primary,
+              onChanged: (value) {
+                if (value != null) {
+                  context.read<SettingsBloc>().add(UpdateRoutingMode(value));
+                  Navigator.pop(dialogContext);
+                }
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  void _showMuxCountDialog(BuildContext context, int currentCount) {
+    final controller = TextEditingController(text: currentCount.toString());
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text(
+          'MUX Count',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+        content: TextField(
+          controller: controller,
+          style: const TextStyle(color: AppColors.textPrimary),
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            hintText: 'Enter MUX count (1-16)',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final count = int.tryParse(controller.text) ?? 8;
+              context.read<SettingsBloc>().add(UpdateMuxCount(count.clamp(1, 16)));
               Navigator.pop(dialogContext);
             },
             child: const Text('Save'),
