@@ -33,6 +33,11 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Generate debug keystore
+        run: |
+          cd android/app
+          keytool -genkey -v -keystore nebula_vpn.keystore -alias nebula_vpn -keyalg RSA -keysize 2048 -validity 10000 -storepass nebula123456 -keypass nebula123456 -dname "CN=nebula_vpn, OU=nebula_vpn, O=nebula_vpn, L=nebula_vpn, S=nebula_vpn, C=US"
+
       - name: Create keystore.properties
         run: |
           cat > android/keystore.properties << EOF
