@@ -115,7 +115,7 @@ class ServersPage extends StatelessWidget {
                   context: context,
                   icon: Icons.cloud_download,
                   label: 'Subscribe',
-                  onTap: () => _showSubscriptionDialog(context),
+                  onTap: () => _showSubscriptionView(context),
                 ),
                 const SizedBox(width: 8),
                 _buildActionButton(
@@ -492,7 +492,6 @@ class ServersPage extends StatelessWidget {
       ),
     );
   }
-}
 
   Future<void> _importFromClipboard(BuildContext context) async {
     final bloc = context.read<ServerBloc>();
@@ -561,106 +560,6 @@ class ServersPage extends StatelessWidget {
       return await subscriptionService.fetchSubscriptionServers(url);
     } catch (e) {
       return [];
-    }
-  }
-
-  Future<void> _importFromFile(BuildContext context) async {
-    final bloc = context.read<ServerBloc>();
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.any,
-        allowMultiple: false,
-      );
-
-      if (result != null && result.files.isNotEmpty) {
-        final file = File(result.files.first.path!);
-        final content = await file.readAsString();
-        final servers = ConfigParserService.parseFromFile(content);
-
-        if (servers.isNotEmpty) {
-          for (final server in servers) {
-            bloc.add(AddServer(server));
-          }
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text('Imported ${servers.length} server(s) from file'),
-              backgroundColor: AppColors.success,
-            ),
-          );
-        } else {
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text('No valid servers found in file'),
-              backgroundColor: AppColors.error,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Failed to read file: $e'),
-          backgroundColor: AppColors.error,
-      ),
-    );
-  }
-
-  Future<void> _importFromClipboard(BuildContext context) async {
-    final bloc = context.read<ServerBloc>();
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final data = await Clipboard.getData(Clipboard.kTextPlain);
-      if (data?.text != null && data!.text!.isNotEmpty) {
-        final text = data.text!.trim();
-        List<ServerNode> servers = [];
-
-        servers = ConfigParserService.parseConfig(text);
-
-        if (servers.isEmpty && text.startsWith('http')) {
-          servers = await _fetchServersFromUrl(text);
-        }
-
-        if (servers.isEmpty) {
-          final normalized = text
-              .replaceAll(RegExp(r'\s+'), '\n')
-              .replaceAll(RegExp(r',+'), '\n');
-          servers = ConfigParserService.parseConfig(normalized);
-        }
-
-        if (servers.isEmpty) {
-          try {
-            final decoded = utf8.decode(base64Decode(text));
-            servers = ConfigParserService.parseConfig(decoded);
-          } catch (_) {}
-        }
-
-        if (servers.isNotEmpty) {
-          for (final server in servers) {
-            bloc.add(AddServer(server));
-          }
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text('Imported ${servers.length} server(s)'),
-              backgroundColor: AppColors.success,
-            ),
-          );
-        } else {
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text('No valid servers found in clipboard'),
-              backgroundColor: AppColors.error,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Failed to read clipboard: $e'),
-          backgroundColor: AppColors.error,
-        ),
-      );
     }
   }
 
