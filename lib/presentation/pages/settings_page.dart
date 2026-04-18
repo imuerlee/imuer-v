@@ -5,6 +5,9 @@ import '../../core/widgets/sci_fi_widgets.dart';
 import '../blocs/settings/settings_bloc.dart';
 import '../blocs/settings/settings_event.dart';
 import '../blocs/settings/settings_state.dart';
+import 'logs_page.dart';
+import 'privacy_policy_page.dart';
+import 'licenses_page.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -35,7 +38,7 @@ class SettingsPage extends StatelessWidget {
               const SizedBox(height: 24),
               _buildAdvancedSettings(context, state),
               const SizedBox(height: 24),
-              _buildAboutSection(),
+              _buildAboutSection(context),
             ],
           ),
         );
@@ -214,7 +217,7 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildAboutSection() {
+  Widget _buildAboutSection(BuildContext context) {
     return SciFiCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -231,21 +234,36 @@ class SettingsPage extends StatelessWidget {
             title: 'Licenses',
             subtitle: 'Open source licenses',
             trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
-            onTap: () {},
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const LicensesPage()),
+              );
+            },
           ),
           const Divider(color: AppColors.border, height: 24),
           _buildInfoTile(
             title: 'Privacy Policy',
             subtitle: 'View privacy policy',
             trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
-            onTap: () {},
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const PrivacyPolicyPage()),
+              );
+            },
           ),
           const Divider(color: AppColors.border, height: 24),
           _buildInfoTile(
             title: 'Logs',
             subtitle: 'View connection logs',
             trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
-            onTap: () {},
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const LogsPage()),
+              );
+            },
           ),
         ],
       ),
@@ -304,8 +322,18 @@ class SettingsPage extends StatelessWidget {
           child: Switch(
             value: value,
             onChanged: onChanged,
-            activeThumbColor: AppColors.primary,
-            activeTrackColor: AppColors.primary.withValues(alpha: 0.3),
+            thumbColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
+                return AppColors.primary;
+              }
+              return null;
+            }),
+            trackColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
+                return AppColors.primary.withOpacity(0.3);
+              }
+              return null;
+            }),
           ),
         ),
       ],
@@ -454,27 +482,25 @@ class SettingsPage extends StatelessWidget {
           'Routing Mode',
           style: TextStyle(color: AppColors.textPrimary),
         ),
-        content: RadioGroup<RoutingMode>(
-          groupValue: currentMode,
-          onChanged: (value) {
-            if (value != null) {
-              context.read<SettingsBloc>().add(UpdateRoutingMode(value));
-              Navigator.pop(dialogContext);
-            }
-          },
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final mode in RoutingMode.values)
-                RadioListTile<RoutingMode>(
-                  value: mode,
-                  title: Text(
-                    _getRoutingModeName(mode),
-                    style: const TextStyle(color: AppColors.textPrimary),
-                  ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final mode in RoutingMode.values)
+              RadioListTile<RoutingMode>(
+                value: mode,
+                groupValue: currentMode,
+                title: Text(
+                  _getRoutingModeName(mode),
+                  style: const TextStyle(color: AppColors.textPrimary),
                 ),
-            ],
-          ),
+                onChanged: (value) {
+                  if (value != null) {
+                    context.read<SettingsBloc>().add(UpdateRoutingMode(value));
+                    Navigator.pop(dialogContext);
+                  }
+                },
+              ),
+          ],
         ),
       ),
     );

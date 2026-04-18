@@ -87,7 +87,7 @@ class ConfigParserService {
         sni: params['sni'] ?? params['peer'],
         alpn: params['alpn'],
         allowInsecure: params['allowInsecure'] == '1',
-        country: _estimateCountry(params['add'] ?? ''),
+        country: _fallbackCountry(params['add'] ?? ''),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -119,7 +119,7 @@ class ConfigParserService {
         host: uri.queryParameters['host'],
         publicKey1: publicKey,
         shortId: uri.queryParameters['shortId'],
-        country: _estimateCountry(uri.host),
+        country: _fallbackCountry(uri.host),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -188,7 +188,7 @@ class ConfigParserService {
         password: password,
         plugin: plugin,
         pluginOpts: pluginOpts,
-        country: _estimateCountry(address),
+        country: _fallbackCountry(address),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -240,7 +240,7 @@ class ConfigParserService {
           protocolParam: protocolParam,
           obfs: obfs,
           obfsParam: obfsParam,
-          country: _estimateCountry(address),
+          country: _fallbackCountry(address),
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
@@ -271,7 +271,7 @@ class ConfigParserService {
         alpn: uri.queryParameters['alpn'],
         path: uri.queryParameters['path'],
         host: uri.queryParameters['host'],
-        country: _estimateCountry(uri.host),
+        country: _fallbackCountry(uri.host),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -324,7 +324,7 @@ class ConfigParserService {
         presharedKey: presharedKey,
         mtu: mtu,
         host: dns,
-        country: _estimateCountry(endpoint),
+        country: _fallbackCountry(endpoint),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -384,7 +384,7 @@ class ConfigParserService {
         obfsPassword: obfsPassword,
         sni: sni,
         allowInsecure: insecure,
-        country: _estimateCountry(server ?? ''),
+        country: _fallbackCountry(server ?? ''),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -411,7 +411,7 @@ class ConfigParserService {
         speedLimitUp: up != null ? _parseSpeed(up) : null,
         speedLimitDown: down != null ? _parseSpeed(down) : null,
         sni: uri.queryParameters['sni'],
-        country: _estimateCountry(uri.host),
+        country: _fallbackCountry(uri.host),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -436,7 +436,7 @@ class ConfigParserService {
         authPassword: hasAuth && uri.userInfo.contains(':') 
             ? Uri.decodeComponent(uri.userInfo.split(':')[1]) 
             : null,
-        country: _estimateCountry(uri.host),
+        country: _fallbackCountry(uri.host),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -465,7 +465,7 @@ class ConfigParserService {
         authPassword: hasAuth && uri.userInfo.contains(':') 
             ? Uri.decodeComponent(uri.userInfo.split(':')[1]) 
             : null,
-        country: _estimateCountry(uri.host),
+        country: _fallbackCountry(uri.host),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -482,7 +482,7 @@ class ConfigParserService {
     return 100;
   }
 
-  static String _estimateCountry(String address) {
+  static String _fallbackCountry(String address) {
     final lower = address.toLowerCase();
     if (lower.contains('us') || lower.contains('usa') || lower.contains('united states')) return 'United States';
     if (lower.contains('uk') || lower.contains('gb') || lower.contains('united kingdom')) return 'United Kingdom';

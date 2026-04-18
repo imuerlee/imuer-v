@@ -10,7 +10,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.net.ProxyInfo
-import android.net.VpnService
+import android.net.VpnService as AndroidVpnService
 import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
@@ -24,29 +24,19 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import java.net.InetSocketAddress
 
-class VpnService : VpnService() {
-
-    // 供 MainActivity 调用的获取统计方法
-    fun getStats(): Map<String, Long> {
-        return mapOf(
-            "uploadSpeed" to uploadSpeed,
-            "downloadSpeed" to downloadSpeed,
-            "totalUpload" to totalUpload,
-            "totalDownload" to totalDownload
-        )
+class VpnService : AndroidVpnService() {
+    companion object {
+        const val TAG = "NebulaVpnService"
+        const val NOTIFICATION_CHANNEL_ID = "nebula_vpn_channel"
+        const val NOTIFICATION_ID = 1
+        const val ACTION_CONNECT = "com.nebula.nebula_vpn.CONNECT"
+        const val ACTION_DISCONNECT = "com.nebula.nebula_vpn.DISCONNECT"
+        const val VPN_ADDRESS = "10.0.0.2"
+        const val VPN_ADDRESS_V6 = "fd00::2"
+        const val DNS_SERVER = "8.8.8.8"
+        const val DNS_SERVER_V6 = "2001:4860:4860::8888"
+        const val PROXY_PORT = 10808
     }
-
-    // 供 MainActivity 调用的获取统计方法
-    fun getStats(): Map<String, Long> {
-        return mapOf(
-            "uploadSpeed" to uploadSpeed,
-            "downloadSpeed" to downloadSpeed,
-            "totalUpload" to totalUpload,
-            "totalDownload" to totalDownload
-        )
-    }
-}
-}
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
@@ -294,7 +284,9 @@ class VpnService : VpnService() {
                 
                 conn.inputStream.use { input ->
                     zipFile.outputStream().use { output ->
-                        while ((count = input.read(data)).also { if (it < 0) return@use } != -1) {
+                        while (true) {
+                            count = input.read(data)
+                            if (count < 0) break
                             output.write(data, 0, count)
                             total += count.toLong()
                             

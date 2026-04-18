@@ -155,7 +155,7 @@ class StatisticsPage extends StatelessWidget {
                       drawVerticalLine: false,
                       horizontalInterval: 10000,
                       getDrawingHorizontalLine: (value) => FlLine(
-                        color: AppColors.border.withValues(alpha: 0.3),
+                        color: AppColors.border.withOpacity(0.3),
                         strokeWidth: 1,
                       ),
                     ),
@@ -200,8 +200,8 @@ class StatisticsPage extends StatelessWidget {
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                             colors: [
-                              AppColors.accentBlue.withValues(alpha: 0.3),
-                              AppColors.accentBlue.withValues(alpha: 0.0),
+                              AppColors.accentBlue.withOpacity(0.3),
+                              AppColors.accentBlue.withOpacity(0.0),
                             ],
                           ),
                         ),

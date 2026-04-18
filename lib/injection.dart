@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'data/datasources/local_database.dart';
 import 'data/datasources/preferences_manager.dart';
 import 'data/services/vpn_service.dart';
+import 'data/services/geo_location_service.dart';
+import 'data/services/log_service.dart';
 import 'presentation/blocs/vpn/vpn_bloc.dart';
 import 'presentation/blocs/server/server_bloc.dart';
 import 'presentation/blocs/statistics/statistics_bloc.dart';
@@ -20,6 +22,11 @@ Future<void> initDependencies() async {
 
   getIt.registerSingleton<LocalDatabase>(LocalDatabase());
   getIt.registerSingleton<VpnService>(VpnService());
+  getIt.registerSingleton<GeoLocationService>(GeoLocationService());
+  
+  final logService = LogService();
+  await logService.initialize();
+  getIt.registerSingleton<LogService>(logService);
 
   getIt.registerFactory<VpnBloc>(
     () => VpnBloc(

@@ -6,8 +6,8 @@ plugins {
 
 android {
     namespace "com.nebula.nebula_vpn"
-    compileSdk flutter.compileSdkVersion
-    ndkVersion flutter.ndkVersion
+    compileSdk 36
+    ndkVersion "27.0.12077973"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -20,8 +20,8 @@ android {
 
     defaultConfig {
         applicationId "com.nebula.nebula_vpn"
-        minSdk flutter.minSdkVersion
-        targetSdk flutter.targetSdkVersion
+        minSdk 23
+        targetSdk 35
         versionCode flutter.versionCode
         versionName flutter.versionName
     }

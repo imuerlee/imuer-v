@@ -262,7 +262,7 @@ class ServersPage extends StatelessWidget {
           Icon(
             Icons.cloud_off,
             size: 80,
-            color: AppColors.textTertiary.withValues(alpha: 0.5),
+            color: AppColors.textTertiary.withOpacity(0.5),
           ),
           const SizedBox(height: 16),
           const Text(
@@ -317,7 +317,7 @@ class ServersPage extends StatelessWidget {
         padding: const EdgeInsets.only(right: 20),
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: AppColors.error.withValues(alpha: 0.2),
+          color: AppColors.error.withOpacity(0.2),
           borderRadius: BorderRadius.circular(16),
         ),
         child: const Icon(Icons.delete, color: AppColors.error),
@@ -368,7 +368,7 @@ class ServersPage extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: _getProtocolColor(server.protocol).withValues(alpha: 0.2),
+                          color: _getProtocolColor(server.protocol).withOpacity(0.2),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
@@ -403,7 +403,7 @@ class ServersPage extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: latencyColor.withValues(alpha: 0.1),
+                    color: latencyColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -1052,7 +1052,7 @@ class _SubscriptionViewState extends State<_SubscriptionView> {
                         width: 32,
                         height: 32,
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.2),
+                          color: AppColors.primary.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Center(
@@ -1694,7 +1694,12 @@ class _AddServerFormState extends State<_AddServerForm> {
               Switch(
                 value: _auth,
                 onChanged: (v) => setState(() => _auth = v),
-                activeThumbColor: AppColors.primary,
+                thumbColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return AppColors.primary;
+                  }
+                  return null;
+                }),
               ),
             ],
           ),
@@ -1724,7 +1729,12 @@ class _AddServerFormState extends State<_AddServerForm> {
               Switch(
                 value: _auth,
                 onChanged: (v) => setState(() => _auth = v),
-                activeThumbColor: AppColors.primary,
+                thumbColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return AppColors.primary;
+                  }
+                  return null;
+                }),
               ),
             ],
           ),
@@ -1855,7 +1865,12 @@ class _AddServerFormState extends State<_AddServerForm> {
               Switch(
                 value: _allowInsecure,
                 onChanged: (v) => setState(() => _allowInsecure = v),
-                activeThumbColor: AppColors.primary,
+                thumbColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return AppColors.primary;
+                  }
+                  return null;
+                }),
               ),
             ],
           ),
@@ -1886,7 +1901,7 @@ class _AddServerFormState extends State<_AddServerForm> {
     required ValueChanged<String?> onChanged,
   }) {
     return DropdownButtonFormField<String>(
-      initialValue: items.contains(value) ? value : (items.isNotEmpty ? items.first : null),
+      value: items.contains(value) ? value : (items.isNotEmpty ? items.first : null),
       decoration: InputDecoration(
         labelText: label,
       ),

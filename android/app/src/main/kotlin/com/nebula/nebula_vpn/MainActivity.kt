@@ -9,10 +9,10 @@ import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.EventChannel.EventSink
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.collect
 
 class MainActivity : FlutterActivity() {
 
@@ -140,7 +140,7 @@ class MainActivity : FlutterActivity() {
             return
         }
 
-        val vpnIntent = VpnService.prepare(this)
+        val vpnIntent = android.net.VpnService.prepare(this)
         if (vpnIntent != null) {
             startActivityForResult(vpnIntent, VPN_PERMISSION_REQUEST_CODE)
             result.success(true)
@@ -149,7 +149,7 @@ class MainActivity : FlutterActivity() {
 
         val intent = Intent(this, VpnService::class.java).apply {
             action = VpnService.ACTION_CONNECT
-            putExtra("config", HashMap(config))
+            putExtra("config", HashMap<String, Any>(config))
         }
         
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {

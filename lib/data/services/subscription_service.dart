@@ -100,29 +100,134 @@ class SubscriptionService {
 
   Future<SubscriptionInfo?> getSubscriptionInfo(String url) async {
     try {
-      final response = await _dio.head(
+      final response = await _dio.get(
         url,
         options: Options(
+          responseType: ResponseType.plain,
           headers: {
             'User-Agent': 'ClashForAndroid/2.5.12',
+            'Accept-Encoding': 'identity',
           },
+          receiveTimeout: const Duration(seconds: 10),
         ),
+        queryParameters: {'_': DateTime.now().millisecondsSinceEpoch.toString()},
       );
 
-      final upload = response.headers.value('upload');
-      final download = response.headers.value('download');
-      final total = response.headers.value('total');
-      final expire = response.headers.value('expire');
+      final headers = response.headers;
+      
+      int? upload;
+      int? download;
+      int? total;
+      DateTime? expire;
 
-      return SubscriptionInfo(
-        upload: upload != null ? int.tryParse(upload) : null,
-        download: download != null ? int.tryParse(download) : null,
-        total: total != null ? int.tryParse(total) : null,
-        expire: expire != null ? DateTime.tryParse(expire) : null,
-      );
+      final uploadStr = headers.value('upload') ?? headers.value('X-Upload') ?? headers.value('x-upload');
+      final downloadStr = headers.value('download') ?? headers.value('X-Download') ?? headers.value('x-download');
+      final totalStr = headers.value('total') ?? headers.value('X-Total') ?? headers.value('x-total');
+      final expireStr = headers.value('expire') ?? headers.value('X-Expire') ?? headers.value('x-expire') 
+                      ?? headers.value('subscription-expire') ?? headers.value('X-Subscription-Expire');
+
+      if (uploadStr != null) {
+        upload = _parseBytesValue(uploadStr);
+      }
+      if (downloadStr != null) {
+        download = _parseBytesValue(downloadStr);
+      }
+      if (totalStr != null) {
+        total = _parseBytesValue(totalStr);
+      }
+      if (expireStr != null) {
+        expire = _parseExpireValue(expireStr);
+      }
+
+      if (upload != null || download != null || total != null || expire != null) {
+        return SubscriptionInfo(
+          upload: upload,
+          download: download,
+          total: total,
+          expire: expire,
+        );
+      }
+
+      final contentLength = response.data.toString().length;
+      if (contentLength > 0) {
+        return SubscriptionInfo(
+          download: contentLength,
+          total: contentLength,
+        );
+      }
+      
+      return null;
     } catch (_) {
       return null;
     }
+  }
+
+  int? _parseBytesValue(String value) {
+    final match = RegExp(r'^(\d+(?:\.\d+)?)\s*([KMGT]?B?)?$', caseSensitive: false).firstMatch(value);
+    if (match != null) {
+      final num = double.tryParse(match.group(1)!);
+      if (num != null) {
+        final unit = (match.group(2) ?? 'B').toUpperCase();
+        int multiplier = 1;
+        switch (unit) {
+          case 'K':
+          case 'KB':
+            multiplier = 1024;
+            break;
+          case 'M':
+          case 'MB':
+            multiplier = 1024 * 1024;
+            break;
+          case 'G':
+          case 'GB':
+            multiplier = 1024 * 1024 * 1024;
+            break;
+          case 'T':
+          case 'TB':
+            multiplier = 1024 * 1024 * 1024 * 1024;
+            break;
+        }
+        return (num * multiplier).round();
+      }
+    }
+    return int.tryParse(value);
+  }
+
+  DateTime? _parseExpireValue(String value) {
+    final timestamp = int.tryParse(value);
+    if (timestamp != null) {
+      if (timestamp > 1e12) {
+        return DateTime.fromMillisecondsSinceEpoch(timestamp);
+      } else {
+        return DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
+      }
+    }
+    
+    final isoDate = DateTime.tryParse(value);
+    if (isoDate != null) {
+      return isoDate;
+    }
+    
+    final durationMatch = RegExp(r'^(\d+)\s*(hour|day|week|month)s?$', caseSensitive: false).firstMatch(value);
+    if (durationMatch != null) {
+      final amount = int.tryParse(durationMatch.group(1)!);
+      final unit = durationMatch.group(2)!.toLowerCase();
+      if (amount != null) {
+        final now = DateTime.now();
+        switch (unit) {
+          case 'hour':
+            return now.add(Duration(hours: amount));
+          case 'day':
+            return now.add(Duration(days: amount));
+          case 'week':
+            return now.add(Duration(days: amount * 7));
+          case 'month':
+            return DateTime(now.year, now.month + amount, now.day);
+        }
+      }
+    }
+    
+    return null;
   }
 }
 

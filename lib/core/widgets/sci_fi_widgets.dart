@@ -24,7 +24,7 @@ class GlowBox extends StatelessWidget {
         borderRadius: borderRadius ?? BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: glowColor.withValues(alpha: 0.3),
+            color: glowColor.withOpacity(0.3),
             blurRadius: blurRadius,
             spreadRadius: spreadRadius,
           ),
@@ -64,17 +64,17 @@ class SciFiCard extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: gradientColors ?? [
             AppColors.surface,
-            AppColors.surface.withValues(alpha: 0.8),
+            AppColors.surface.withOpacity(0.8),
           ],
         ),
         border: Border.all(
-          color: showGlow ? AppColors.primary.withValues(alpha: 0.5) : AppColors.border,
+          color: showGlow ? AppColors.primary.withOpacity(0.5) : AppColors.border,
           width: showGlow ? 2 : 1,
         ),
         boxShadow: showGlow
             ? [
                 BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.2),
+                  color: AppColors.primary.withOpacity(0.2),
                   blurRadius: 20,
                   spreadRadius: 2,
                 ),
@@ -118,7 +118,7 @@ class NeonBorder extends StatelessWidget {
         border: Border.all(color: color, width: borderWidth),
         boxShadow: [
           BoxShadow(
-            color: color.withValues(alpha: 0.5),
+            color: color.withOpacity(0.5),
             blurRadius: 10,
             spreadRadius: 1,
           ),
@@ -178,7 +178,7 @@ class _AnimatedPulseState extends State<AnimatedPulse>
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: widget.pulseColor.withValues(alpha: _animation.value),
+                color: widget.pulseColor.withOpacity(_animation.value),
                 blurRadius: 20,
                 spreadRadius: 5,
               ),
