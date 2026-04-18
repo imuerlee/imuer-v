@@ -356,6 +356,11 @@ class ServerNode extends Equatable {
       'verifyHostname': verifyHostname,
       'publicKey1': publicKey1,
       'shortId': shortId,
+      'subscriptionUrl': subscriptionUrl,
+      'subscriptionDownload': subscriptionDownload,
+      'subscriptionUpload': subscriptionUpload,
+      'subscriptionTotal': subscriptionTotal,
+      'subscriptionExpire': subscriptionExpire?.toIso8601String(),
     };
   }
 
@@ -388,8 +393,8 @@ class ServerNode extends Equatable {
       downloadSpeed: json['downloadSpeed'] as int?,
       isActive: json['isActive'] == true,
       groupId: json['groupId'] as String?,
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
+      createdAt: DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now(),
+      updatedAt: DateTime.tryParse(json['updatedAt'] as String) ?? DateTime.now(),
       flow: json['flow'] as String?,
       method: json['method'] as String?,
       plugin: json['plugin'] as String?,
@@ -415,6 +420,13 @@ class ServerNode extends Equatable {
       verifyHostname: json['verifyHostname'] as bool?,
       publicKey1: json['publicKey1'] as String?,
       shortId: json['shortId'] as String?,
+      subscriptionUrl: json['subscriptionUrl'] as String?,
+      subscriptionDownload: json['subscriptionDownload'] as int?,
+      subscriptionUpload: json['subscriptionUpload'] as int?,
+      subscriptionTotal: json['subscriptionTotal'] as int?,
+      subscriptionExpire: json['subscriptionExpire'] != null
+          ? DateTime.tryParse(json['subscriptionExpire'] as String)
+          : null,
     );
   }
 

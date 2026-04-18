@@ -45,6 +45,11 @@ class LocalDatabase {
       ('obfs_param', 'TEXT'),
       ('public_key1', 'TEXT'),
       ('short_id', 'TEXT'),
+      ('subscription_url', 'TEXT'),
+      ('subscription_download', 'INTEGER'),
+      ('subscription_upload', 'INTEGER'),
+      ('subscription_total', 'INTEGER'),
+      ('subscription_expire', 'TEXT'),
     ];
 
     for (final (colName, colType) in newColumns) {
@@ -106,6 +111,11 @@ class LocalDatabase {
         download_speed INTEGER,
         is_active INTEGER DEFAULT 1,
         group_id TEXT,
+        subscription_url TEXT,
+        subscription_upload INTEGER,
+        subscription_download INTEGER,
+        subscription_total INTEGER,
+        subscription_expire TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )

@@ -14,7 +14,7 @@ class AppConstants {
   ];
   
   static const String dbName = 'nebula_vpn.db';
-  static const int dbVersion = 2;
+  static const int dbVersion = 3;
   
   static const String prefVpnEnabled = 'vpn_enabled';
   static const String prefAutoConnect = 'auto_connect';

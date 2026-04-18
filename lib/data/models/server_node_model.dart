@@ -109,8 +109,15 @@ class ServerNodeModel extends ServerNode {
       downloadSpeed: json['download_speed'] as int?,
       isActive: json['is_active'] == 1,
       groupId: json['group_id'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      createdAt: DateTime.tryParse(json['created_at'] as String) ?? DateTime.now(),
+      updatedAt: DateTime.tryParse(json['updated_at'] as String) ?? DateTime.now(),
+      subscriptionUrl: json['subscription_url'] as String?,
+      subscriptionDownload: json['subscription_download'] as int?,
+      subscriptionUpload: json['subscription_upload'] as int?,
+      subscriptionTotal: json['subscription_total'] as int?,
+      subscriptionExpire: json['subscription_expire'] != null 
+          ? DateTime.tryParse(json['subscription_expire'] as String)
+          : null,
     );
   }
 
@@ -168,6 +175,11 @@ class ServerNodeModel extends ServerNode {
       'group_id': groupId,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'subscription_url': subscriptionUrl,
+      'subscription_download': subscriptionDownload,
+      'subscription_upload': subscriptionUpload,
+      'subscription_total': subscriptionTotal,
+      'subscription_expire': subscriptionExpire?.toIso8601String(),
     };
   }
 
