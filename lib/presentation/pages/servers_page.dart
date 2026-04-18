@@ -440,6 +440,7 @@ class ServersPage extends StatelessWidget {
   }
 
   void _showQRScanner(BuildContext context) {
+    final serverBloc = context.read<ServerBloc>();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -447,16 +448,51 @@ class ServersPage extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (dialogContext) => SizedBox(
-        height: MediaQuery.of(context).size.height * 0.7,
-        child: _QRScannerView(
-          onServerAdded: (server) {
-            context.read<ServerBloc>().add(AddServer(server));
-          },
-        ),
+      builder: (dialogContext) => _QRScannerView(
+        onServerAdded: (server) {
+          serverBloc.add(AddServer(server));
+        },
       ),
     );
   }
+
+  void _showSubscriptionView(BuildContext context) {
+    final serverBloc = context.read<ServerBloc>();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (dialogContext) => _SubscriptionView(
+        onServersImported: (servers) {
+          for (final server in servers) {
+            serverBloc.add(AddServer(server));
+          }
+        },
+      ),
+    );
+  }
+
+  void _showAddServerDialog(BuildContext context) {
+    final serverBloc = context.read<ServerBloc>();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (dialogContext) => _AddServerForm(
+        onAdd: (server) {
+          serverBloc.add(AddServer(server));
+          Navigator.pop(dialogContext);
+        },
+      ),
+    );
+  }
+}
 
   Future<void> _importFromClipboard(BuildContext context) async {
     final bloc = context.read<ServerBloc>();
@@ -566,44 +602,109 @@ class ServersPage extends StatelessWidget {
         SnackBar(
           content: Text('Failed to read file: $e'),
           backgroundColor: AppColors.error,
+      ),
+    );
+  }
+
+  Future<void> _importFromClipboard(BuildContext context) async {
+    final bloc = context.read<ServerBloc>();
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      if (data?.text != null && data!.text!.isNotEmpty) {
+        final text = data.text!.trim();
+        List<ServerNode> servers = [];
+
+        servers = ConfigParserService.parseConfig(text);
+
+        if (servers.isEmpty && text.startsWith('http')) {
+          servers = await _fetchServersFromUrl(text);
+        }
+
+        if (servers.isEmpty) {
+          final normalized = text
+              .replaceAll(RegExp(r'\s+'), '\n')
+              .replaceAll(RegExp(r',+'), '\n');
+          servers = ConfigParserService.parseConfig(normalized);
+        }
+
+        if (servers.isEmpty) {
+          try {
+            final decoded = utf8.decode(base64Decode(text));
+            servers = ConfigParserService.parseConfig(decoded);
+          } catch (_) {}
+        }
+
+        if (servers.isNotEmpty) {
+          for (final server in servers) {
+            bloc.add(AddServer(server));
+          }
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text('Imported ${servers.length} server(s)'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        } else {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('No valid servers found in clipboard'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to read clipboard: $e'),
+          backgroundColor: AppColors.error,
         ),
       );
     }
   }
 
-  void _showSubscriptionDialog(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (dialogContext) => _SubscriptionView(
-        onServersImported: (servers) {
-          for (final server in servers) {
-            context.read<ServerBloc>().add(AddServer(server));
-          }
-        },
-      ),
-    );
-  }
+  Future<void> _importFromFile(BuildContext context) async {
+    final bloc = context.read<ServerBloc>();
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+      );
 
-  void _showAddServerDialog(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (dialogContext) => _AddServerForm(
-        onAdd: (server) {
-          context.read<ServerBloc>().add(AddServer(server));
-          Navigator.pop(dialogContext);
-        },
-      ),
-    );
+      if (result != null && result.files.isNotEmpty) {
+        final file = File(result.files.first.path!);
+        final content = await file.readAsString();
+        final servers = ConfigParserService.parseFromFile(content);
+
+        if (servers.isNotEmpty) {
+          for (final server in servers) {
+            bloc.add(AddServer(server));
+          }
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text('Imported ${servers.length} server(s) from file'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        } else {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('No valid servers found in file'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to read file: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 }
 
