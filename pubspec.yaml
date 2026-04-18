@@ -53,11 +53,11 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
 
-# 解决 sqlite3 哈希值验证问题
+# 解决 sqlite3 API 不兼容问题 - 使用最新兼容版本
 dependency_overrides:
-  sqlite3: ^2.1.0
-  sqflite_common: ^2.5.0
-  sqflite_common_ffi: ^2.3.0
+  sqlite3: ^2.7.0
+  sqflite_common: ^2.5.4+6
+  sqflite_common_ffi: ^2.5.0
 
 flutter:
   generate: true
