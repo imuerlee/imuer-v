@@ -1,9 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:uuid/uuid.dart';
-import '../../../domain/entities/server_node.dart';
 import '../../../data/datasources/local_database.dart';
 import '../../../data/models/server_node_model.dart';
 import '../../../data/services/config_parser_service.dart';
@@ -12,7 +9,6 @@ import 'server_state.dart';
 
 class ServerBloc extends Bloc<ServerEvent, ServerState> {
   final LocalDatabase _database;
-  final _uuid = const Uuid();
 
   ServerBloc({required LocalDatabase database})
       : _database = database,
