@@ -44,10 +44,10 @@ jobs:
           V2RAY_VERSION="v5.22.0"
           V2RAY_URL="https://github.com/v2fly/v2ray-core/releases/download/${V2RAY_VERSION}/v2ray-android-arm64-v8a.zip"
           curl -L -o /tmp/v2ray.zip "$V2RAY_URL"
-          unzip -j /tmp/v2ray.zip "v2ray" -d android/app/src/main/assets/v2ray/
-          unzip -j /tmp/v2ray.zip "geoip.dat" -d android/app/src/main/assets/v2ray/
-          unzip -j /tmp/v2ray.zip "geosite.dat" -d android/app/src/main/assets/v2ray/
-          unzip -j /tmp/v2ray.zip "v2ray" -d android/app/src/main/assets/v2ray/
+          unzip -o /tmp/v2ray.zip -d /tmp/v2ray_extracted/
+          cp /tmp/v2ray_extracted/v2ray android/app/src/main/assets/v2ray/
+          cp /tmp/v2ray_extracted/geoip.dat android/app/src/main/assets/v2ray/ || true
+          cp /tmp/v2ray_extracted/geosite.dat android/app/src/main/assets/v2ray/ || true
           chmod 755 android/app/src/main/assets/v2ray/v2ray
           ls -la android/app/src/main/assets/v2ray/
 
