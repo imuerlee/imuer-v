@@ -126,7 +126,7 @@ class VpnService : AndroidVpnService() {
         }
     }
 
-    private fun createNotification(): Notification {
+    private fun createNotification(title: String, text: String): Notification {
         val pendingIntent = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java),
@@ -134,17 +134,34 @@ class VpnService : AndroidVpnService() {
         )
 
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("Nebula VPN")
-            .setContentText("VPN connected")
+            .setContentTitle(title)
+            .setContentText(text)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()
     }
+    
+    private fun startForegroundWithNotification(title: String, text: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, createNotification(title, text), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            startForeground(NOTIFICATION_ID, createNotification(title, text))
+        }
+    }
+    
+    private fun updateNotification(title: String, text: String) {
+        val notification = createNotification(title, text)
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager.notify(NOTIFICATION_ID, notification)
+    }
 
     private fun connect(config: Map<String, Any>?) {
         serviceScope.launch {
             try {
+                // 立即启动前台通知，显示"连接中"
+                startForegroundWithNotification("Nebula VPN", "Connecting...")
+                
                 _connectionState.value = ConnectionState.CONNECTING
                 sendStateChange()
                 
@@ -152,6 +169,7 @@ class VpnService : AndroidVpnService() {
                 
                 // 检查并下载 v2ray-core
                 if (!checkV2RayCore()) {
+                    updateNotification("Nebula VPN", "Failed to download v2ray-core")
                     throw IllegalStateException("Failed to prepare v2ray-core")
                 }
                 
@@ -185,23 +203,24 @@ class VpnService : AndroidVpnService() {
                     setUnderlyingNetworks(null)
                 }
                 
+                // 更新通知
+                updateNotification("Nebula VPN", "Starting v2ray-core...")
+                
                 // 启动 v2ray-core
                 startV2Ray(configPath)
                 
                 // 等待连接建立
+                updateNotification("Nebula VPN", "Testing connection...")
                 delay(2000)
                 
                 // 测试连接
                 if (!testConnection()) {
+                    updateNotification("Nebula VPN", "Connection test failed")
                     throw IllegalStateException("Connection test failed")
                 }
                 
-                // 启动前台服务
-                startForeground(
-                    NOTIFICATION_ID,
-                    createNotification(),
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-                )
+                // 连接成功，更新通知
+                updateNotification("Nebula VPN", "VPN connected")
                 
                 _connectionState.value = ConnectionState.CONNECTED
                 sendStateChange()
