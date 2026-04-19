@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../../domain/entities/server_node.dart';
 
 class GeoLocationService {
@@ -28,10 +29,12 @@ class GeoLocationService {
   Future<ServerNode> _lookupIpAddress(ServerNode server) async {
     final cached = _getCached(server.address);
     if (cached != null) {
+      debugPrint('GeoLocation: Using cached data for ${server.address}');
       return _applyGeoData(server, cached);
     }
 
     try {
+      debugPrint('GeoLocation: Querying ip-api.com for ${server.address}');
       final response = await _dio.get(
         'http://ip-api.com/json/${server.address}',
         options: Options(
@@ -43,12 +46,13 @@ class GeoLocationService {
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data as Map<String, dynamic>;
+        debugPrint('GeoLocation: ip-api.com response: $data');
         final geoData = _GeoData.fromApiResponse(data);
         _cache[server.address] = _GeoCache(geoData, DateTime.now());
         return _applyGeoData(server, geoData);
       }
     } catch (e) {
-      // Fall back to domain lookup
+      debugPrint('GeoLocation: ip-api.com failed: $e');
     }
 
     return _lookupDomain(server);
@@ -57,10 +61,12 @@ class GeoLocationService {
   Future<ServerNode> _lookupDomain(ServerNode server) async {
     final cached = _getCached(server.address);
     if (cached != null) {
+      debugPrint('GeoLocation: Using cached data for ${server.address}');
       return _applyGeoData(server, cached);
     }
 
     try {
+      debugPrint('GeoLocation: Querying ipapi.co for ${server.address}');
       final response = await _dio.get(
         'https://ipapi.co/json/',
         queryParameters: {'hostname': server.address},
@@ -73,15 +79,18 @@ class GeoLocationService {
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data as Map<String, dynamic>;
+        debugPrint('GeoLocation: ipapi.co response: $data');
         final geoData = _GeoData.fromIpApiResponse(data);
         _cache[server.address] = _GeoCache(geoData, DateTime.now());
         return _applyGeoData(server, geoData);
       }
     } catch (e) {
-      // Continue with fallback
+      debugPrint('GeoLocation: ipapi.co failed: $e');
     }
 
-    return _applyFallbackCountry(server);
+    final fallback = _applyFallbackCountry(server);
+    debugPrint('GeoLocation: Using fallback country: ${fallback.country}');
+    return fallback;
   }
 
   _GeoData? _getCached(String address) {

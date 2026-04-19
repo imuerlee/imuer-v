@@ -115,11 +115,26 @@ class MainActivity : FlutterActivity() {
         eventChannel.setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, events: EventSink?) {
                 eventSink = events
+                
+                // 设置 VpnService 的回调以直接接收统计更新
+                VpnService.onStatsUpdate = { stats ->
+                    runOnUiThread {
+                        eventSink?.success(mapOf("type" to "stats") + stats)
+                    }
+                }
+                VpnService.onStateChange = { state ->
+                    runOnUiThread {
+                        eventSink?.success(mapOf("type" to state.lowercase(), "message" to "State changed"))
+                    }
+                }
+                
                 startStatsPolling()
             }
 
             override fun onCancel(arguments: Any?) {
                 eventSink = null
+                VpnService.onStatsUpdate = null
+                VpnService.onStateChange = null
                 stopStatsPolling()
             }
         })
@@ -145,7 +160,7 @@ class MainActivity : FlutterActivity() {
                         "totalDownload" to stats["totalDownload"]!!
                     )
                     
-                    // 根据状态发送事件
+                    // 根据状态发送初始连接事件（后续状态变化由回调处理）
                     when (state) {
                         VpnService.ConnectionState.CONNECTED -> {
                             sendEvent("connected", mapOf(
@@ -164,11 +179,9 @@ class MainActivity : FlutterActivity() {
                         }
                         VpnService.ConnectionState.DISCONNECTED -> {
                             sendEvent("disconnected", mapOf("message" to "VPN disconnected"))
-                            return@let
                         }
                         VpnService.ConnectionState.ERROR -> {
                             sendEvent("error", mapOf("message" to "VPN connection error"))
-                            return@let
                         }
                     }
                 }

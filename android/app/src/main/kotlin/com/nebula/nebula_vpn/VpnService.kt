@@ -48,6 +48,10 @@ class VpnService : AndroidVpnService() {
         private var instance: VpnService? = null
 
         fun getInstance(): VpnService? = instance
+        
+        // 用于直接发送事件到 Flutter 的回调
+        var onStatsUpdate: ((Map<String, Any>) -> Unit)? = null
+        var onStateChange: ((String) -> Unit)? = null
     }
     
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -510,13 +514,25 @@ class VpnService : AndroidVpnService() {
             putExtra(EXTRA_CONNECTION_STATE, _connectionState.value.name)
         }
         sendBroadcast(intent)
+        
+        // 直接调用回调发送到 Flutter
+        onStatsUpdate?.invoke(mapOf(
+            "uploadSpeed" to uploadSpeed,
+            "downloadSpeed" to downloadSpeed,
+            "totalUpload" to totalUpload,
+            "totalDownload" to totalDownload
+        ))
     }
 
     private fun sendStateChange() {
+        val state = _connectionState.value.name
         val intent = Intent(ACTION_STATE_CHANGE).apply {
-            putExtra(EXTRA_CONNECTION_STATE, _connectionState.value.name)
+            putExtra(EXTRA_CONNECTION_STATE, state)
         }
         sendBroadcast(intent)
+        
+        // 直接调用回调发送到 Flutter
+        onStateChange?.invoke(state)
     }
 
     // 供 MainActivity 调用的获取统计方法
