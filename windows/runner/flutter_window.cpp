@@ -1,9 +1,14 @@
 #include "flutter_window.h"
 
 #include <optional>
+#include <windows.h>
 
 #include "flutter/generated_plugin_registrant.h"
 #include "vpn_handler.h"
+#include <flutter/basic_message_channel.h>
+#include <flutter/method_channel.h>
+#include <flutter/event_channel.h>
+#include <flutter/standard_method_codec.h>
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -86,17 +91,15 @@ class VpnStreamHandler : public flutter::StreamHandler<flutter::EncodableValue> 
 };
 
 void FlutterWindow::SetupVpnChannels() {
-  // Create method channel
+  // Create method channel - use default codec
   vpn_method_channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
       flutter_controller_->engine()->messenger(),
-      "nebula_vpn/method",
-      &flutter::StandardMethodCodec::GetInstance());
+      "nebula_vpn/method");
 
-  // Create event channel
+  // Create event channel - use default codec
   vpn_event_channel_ = std::make_unique<flutter::EventChannel<flutter::EncodableValue>>(
       flutter_controller_->engine()->messenger(),
-      "nebula_vpn/events",
-      &flutter::StandardMethodCodec::GetInstance());
+      "nebula_vpn/events");
 
   // Set method call handler
   vpn_method_channel_->SetMethodCallHandler(
