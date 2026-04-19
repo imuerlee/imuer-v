@@ -21,7 +21,6 @@
 
 namespace {
   constexpr const char* V2RAY_VERSION = "v5.22.0";
-  constexpr const char* V2RAY_URL = "https://github.com/v2fly/v2ray-core/releases/download/v5.22.0/v2ray-windows-64.zip";
   constexpr const int STATS_INTERVAL_MS = 1000;
   constexpr const int CONNECTION_TIMEOUT_MS = 5000;
 }
@@ -186,129 +185,37 @@ void VpnHandler::GetStatus(std::unique_ptr<flutter::MethodResult<flutter::Encoda
 }
 
 bool VpnHandler::DownloadV2RayCore() {
-  // 检查是否已存在
+  // 先检查打包的 v2ray 位置（在 exe 同目录下）
+  std::string bundledPath = working_dir_ + "\\v2ray\\v2ray.exe";
+  if (PathFileExistsA(bundledPath.c_str())) {
+    // 使用打包的 v2ray，复制到工作目录
+    std::string srcExe = working_dir_ + "\\v2ray\\v2ray.exe";
+    std::string srcGeoip = working_dir_ + "\\v2ray\\geoip.dat";
+    std::string srcGeosite = working_dir_ + "\\v2ray\\geosite.dat";
+    
+    CopyFileA(srcExe.c_str(), v2ray_path_.c_str(), FALSE);
+    
+    // 复制 geoip.dat 和 geosite.dat
+    std::string destGeoip = working_dir_ + "\\geoip.dat";
+    std::string destGeosite = working_dir_ + "\\geosite.dat";
+    
+    if (PathFileExistsA(srcGeoip.c_str())) {
+      CopyFileA(srcGeoip.c_str(), destGeoip.c_str(), FALSE);
+    }
+    if (PathFileExistsA(srcGeosite.c_str())) {
+      CopyFileA(srcGeosite.c_str(), destGeosite.c_str(), FALSE);
+    }
+    
+    return true;
+  }
+  
+  // 检查工作目录是否已有
   if (PathFileExistsA(v2ray_path_.c_str())) {
     return true;
   }
   
-  // 创建目录
-  CreateDirectoryA(working_dir_.c_str(), NULL);
-  
-  // 下载 v2ray-core zip 文件
-  std::string zipPath = working_dir_ + "\\v2ray.zip";
-  
-  if (!DownloadFile(V2RAY_URL, zipPath)) {
-    return false;
-  }
-  
-  // 解压文件 (使用 PowerShell)
-  std::string extractCmd = "powershell -command \"Expand-Archive -Path '" + zipPath + 
-                          "' -DestinationPath '" + working_dir_ + "' -Force\"";
-  
-  int ret = system(extractCmd.c_str());
-  if (ret != 0) {
-    DeleteFileA(zipPath.c_str());
-    return false;
-  }
-  
-  // 删除 zip 文件
-  DeleteFileA(zipPath.c_str());
-  
-  // 验证文件是否存在
-  if (!PathFileExistsA(v2ray_path_.c_str())) {
-    return false;
-  }
-  
-  return true;
-}
-
-bool VpnHandler::DownloadFile(const std::string& url, const std::string& destPath) {
-  // Use WinHTTP for downloading
-  HINTERNET hSession = WinHttpOpen(L"NebulaVPN/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, NULL, NULL, 0);
-  if (!hSession) {
-    return false;
-  }
-  
-  // Parse URL
-  URL_COMPONENTS urlComponents = {};
-  urlComponents.dwStructSize = sizeof(urlComponents);
-  std::wstring urlW(url.begin(), url.end());
-  
-  wchar_t hostName[256] = {};
-  wchar_t urlPath[1024] = {};
-  urlComponents.lpszHostName = hostName;
-  urlComponents.dwHostNameLength = 256;
-  urlComponents.lpszUrlPath = urlPath;
-  urlComponents.dwUrlPathLength = 1024;
-  
-  if (!WinHttpCrackUrl(urlW.c_str(), static_cast<DWORD>(urlW.length()), 0, &urlComponents)) {
-    WinHttpCloseHandle(hSession);
-    return false;
-  }
-  
-  // Connect
-  HINTERNET hConnect = WinHttpConnect(hSession, hostName, urlComponents.nPort, 0);
-  if (!hConnect) {
-    WinHttpCloseHandle(hSession);
-    return false;
-  }
-  
-  // Open request
-  DWORD flags = (urlComponents.nScheme == INTERNET_SCHEME_HTTPS) ? WINHTTP_FLAG_SECURE : 0;
-  HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", urlPath, NULL, NULL, NULL, flags);
-  if (!hRequest) {
-    WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
-    return false;
-  }
-  
-  // Send request
-  BOOL result = WinHttpSendRequest(hRequest, NULL, 0, NULL, 0, 0, 0);
-  if (!result) {
-    WinHttpCloseHandle(hRequest);
-    WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
-    return false;
-  }
-  
-  // Receive response
-  result = WinHttpReceiveResponse(hRequest, NULL);
-  if (!result) {
-    WinHttpCloseHandle(hRequest);
-    WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
-    return false;
-  }
-  
-  // Open file for writing
-  HANDLE hFile = CreateFileA(destPath.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-  if (hFile == INVALID_HANDLE_VALUE) {
-    WinHttpCloseHandle(hRequest);
-    WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
-    return false;
-  }
-  
-  // Read data
-  char buffer[8192];
-  DWORD bytesRead, bytesWritten;
-  BOOL readResult = TRUE;
-  
-  while (readResult) {
-    readResult = WinHttpReadData(hRequest, buffer, sizeof(buffer), &bytesRead);
-    if (readResult && bytesRead > 0) {
-      WriteFile(hFile, buffer, bytesRead, &bytesWritten, NULL);
-    } else {
-      break;
-    }
-  }
-  
-  CloseHandle(hFile);
-  WinHttpCloseHandle(hRequest);
-  WinHttpCloseHandle(hConnect);
-  WinHttpCloseHandle(hSession);
-  
-  return true;
+  // 如果都不存在，返回 false（v2ray 应该由构建流程打包）
+  return false;
 }
 
 bool VpnHandler::GenerateConfig(const flutter::EncodableMap& flutterConfig) {

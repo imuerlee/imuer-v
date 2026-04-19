@@ -295,13 +295,69 @@ class VpnService : AndroidVpnService() {
         val file = File(v2rayPath)
         
         if (file.exists()) {
-            Log.i(TAG, "v2ray-core already exists")
+            Log.i(TAG, "v2ray-core already exists at $v2rayPath")
             return true
         }
         
-        // 下载 v2ray-core
-        Log.i(TAG, "Downloading v2ray-core...")
-        return downloadV2RayCore()
+        // 尝试从 assets 复制
+        Log.i(TAG, "Trying to copy v2ray-core from assets...")
+        return copyFromAssets()
+    }
+
+    private suspend fun copyFromAssets(): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val assetManager = assets
+                val destDir = filesDir
+                val v2rayFile = File(destDir, "v2ray")
+                
+                // 复制 v2ray 主程序
+                try {
+                    assetManager.open("v2ray/v2ray").use { input ->
+                        v2rayFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    Log.i(TAG, "Copied v2ray from assets")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to copy v2ray from assets: ${e.message}")
+                    return@withContext false
+                }
+                
+                // 复制 geoip.dat
+                try {
+                    val geoipFile = File(destDir, "geoip.dat")
+                    assetManager.open("v2ray/geoip.dat").use { input ->
+                        geoipFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    Log.i(TAG, "Copied geoip.dat from assets")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to copy geoip.dat: ${e.message}")
+                }
+                
+                // 复制 geosite.dat
+                try {
+                    val geositeFile = File(destDir, "geosite.dat")
+                    assetManager.open("v2ray/geosite.dat").use { input ->
+                        geositeFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    Log.i(TAG, "Copied geosite.dat from assets")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to copy geosite.dat: ${e.message}")
+                }
+                
+                v2rayFile.setExecutable(true, false)
+                Log.i(TAG, "v2ray-core copied from assets successfully")
+                return@withContext true
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to copy from assets: ${e.message}", e)
+                return@withContext false
+            }
+        }
     }
 
     private suspend fun downloadV2RayCore(): Boolean {

@@ -26,6 +26,31 @@ jobs:
           cache-key: windows-stable-${{ hashFiles('**/pubspec.lock') }}
           cache-path: ${{ runner.homedir }}/flutter/.pub-cache
 
+      - name: Download v2ray-core for Windows
+        shell: pwsh
+        run: |
+          $v2rayVersion = "v5.22.0"
+          $url = "https://github.com/v2fly/v2ray-core/releases/download/${v2rayVersion}/v2ray-windows-64.zip"
+          $outputPath = "$env:TEMP\v2ray.zip"
+          $v2rayDir = "windows\v2ray"
+          
+          # Create v2ray directory
+          New-Item -ItemType Directory -Force -Path $v2rayDir | Out-Null
+          
+          # Download v2ray-core
+          Write-Host "Downloading v2ray-core from $url"
+          Invoke-WebRequest -Uri $url -OutFile $outputPath -UseBasicParsing
+          
+          # Extract v2ray.exe
+          Write-Host "Extracting v2ray-core..."
+          Expand-Archive -Path $outputPath -DestinationPath "$env:TEMP\v2ray" -Force
+          Copy-Item -Path "$env:TEMP\v2ray\v2ray.exe" -Destination $v2rayDir -Force
+          Copy-Item -Path "$env:TEMP\v2ray\geoip.dat" -Destination $v2rayDir -Force -ErrorAction SilentlyContinue
+          Copy-Item -Path "$env:TEMP\v2ray\geosite.dat" -Destination $v2rayDir -Force -ErrorAction SilentlyContinue
+          
+          # List files
+          Get-ChildItem $v2rayDir
+
       - name: Get dependencies
         run: flutter pub get
 
