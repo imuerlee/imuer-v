@@ -27,6 +27,7 @@ Future<void> initDependencies() async {
   final logService = LogService();
   await logService.initialize();
   getIt.registerSingleton<LogService>(logService);
+  logService.i('LogService initialized');
 
   getIt.registerFactory<VpnBloc>(
     () => VpnBloc(

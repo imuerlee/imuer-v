@@ -31,13 +31,25 @@ class VpnService : AndroidVpnService() {
         const val NOTIFICATION_ID = 1
         const val ACTION_CONNECT = "com.nebula.nebula_vpn.CONNECT"
         const val ACTION_DISCONNECT = "com.nebula.nebula_vpn.DISCONNECT"
+        const val ACTION_STATS_UPDATE = "com.nebula.nebula_vpn.STATS_UPDATE"
+        const val ACTION_STATE_CHANGE = "com.nebula.nebula_vpn.STATE_CHANGE"
+        const val EXTRA_UPLOAD_SPEED = "uploadSpeed"
+        const val EXTRA_DOWNLOAD_SPEED = "downloadSpeed"
+        const val EXTRA_TOTAL_UPLOAD = "totalUpload"
+        const val EXTRA_TOTAL_DOWNLOAD = "totalDownload"
+        const val EXTRA_CONNECTION_STATE = "connectionState"
         const val VPN_ADDRESS = "10.0.0.2"
         const val VPN_ADDRESS_V6 = "fd00::2"
         const val DNS_SERVER = "8.8.8.8"
         const val DNS_SERVER_V6 = "2001:4860:4860::8888"
         const val PROXY_PORT = 10808
-    }
 
+        @Volatile
+        private var instance: VpnService? = null
+
+        fun getInstance(): VpnService? = instance
+    }
+    
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
     // 状态
@@ -67,6 +79,7 @@ class VpnService : AndroidVpnService() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         createNotificationChannel()
     }
 
@@ -89,6 +102,7 @@ class VpnService : AndroidVpnService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        instance = null
         disconnect()
         serviceScope.cancel()
     }
@@ -97,7 +111,7 @@ class VpnService : AndroidVpnService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 NOTIFICATION_CHANNEL_ID,
-                "VPN Service",
+                "NebulaVPN",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "VPN connection status"
@@ -128,6 +142,7 @@ class VpnService : AndroidVpnService() {
         serviceScope.launch {
             try {
                 _connectionState.value = ConnectionState.CONNECTING
+                sendStateChange()
                 
                 serverConfig = config
                 
@@ -185,6 +200,7 @@ class VpnService : AndroidVpnService() {
                 )
                 
                 _connectionState.value = ConnectionState.CONNECTED
+                sendStateChange()
                 
                 // 启动统计收集
                 collectStats()
@@ -194,6 +210,7 @@ class VpnService : AndroidVpnService() {
             } catch (e: Exception) {
                 Log.e(TAG, "Connection failed: ${e.message}")
                 _connectionState.value = ConnectionState.ERROR
+                sendStateChange()
                 disconnect()
             }
         }
@@ -203,6 +220,7 @@ class VpnService : AndroidVpnService() {
         serviceScope.launch {
             try {
                 _connectionState.value = ConnectionState.DISCONNECTING
+                sendStateChange()
                 
                 // 停止 v2ray-core
                 stopV2Ray()
@@ -226,6 +244,7 @@ class VpnService : AndroidVpnService() {
                 totalDownload = 0
                 
                 _connectionState.value = ConnectionState.DISCONNECTED
+                sendStateChange()
                 
                 Log.i(TAG, "VPN disconnected")
                 
@@ -481,6 +500,23 @@ class VpnService : AndroidVpnService() {
             "totalUpload" to totalUpload,
             "totalDownload" to totalDownload
         )
+        
+        // 发送广播以便 MainActivity 可以接收
+        val intent = Intent(ACTION_STATS_UPDATE).apply {
+            putExtra(EXTRA_UPLOAD_SPEED, uploadSpeed)
+            putExtra(EXTRA_DOWNLOAD_SPEED, downloadSpeed)
+            putExtra(EXTRA_TOTAL_UPLOAD, totalUpload)
+            putExtra(EXTRA_TOTAL_DOWNLOAD, totalDownload)
+            putExtra(EXTRA_CONNECTION_STATE, _connectionState.value.name)
+        }
+        sendBroadcast(intent)
+    }
+
+    private fun sendStateChange() {
+        val intent = Intent(ACTION_STATE_CHANGE).apply {
+            putExtra(EXTRA_CONNECTION_STATE, _connectionState.value.name)
+        }
+        sendBroadcast(intent)
     }
 
     // 供 MainActivity 调用的获取统计方法

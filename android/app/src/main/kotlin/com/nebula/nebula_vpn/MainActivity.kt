@@ -1,6 +1,9 @@
 package com.nebula.nebula_vpn
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -44,16 +47,59 @@ class MainActivity : FlutterActivity() {
     // 绑定到 VpnService
     private var vpnService: VpnService? = null
     private var serviceBound = false
+    
+    // 广播接收器
+    private val statsReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                VpnService.ACTION_STATS_UPDATE -> {
+                    cachedStats = mapOf(
+                        "uploadSpeed" to intent.getLongExtra(VpnService.EXTRA_UPLOAD_SPEED, 0),
+                        "downloadSpeed" to intent.getLongExtra(VpnService.EXTRA_DOWNLOAD_SPEED, 0),
+                        "totalUpload" to intent.getLongExtra(VpnService.EXTRA_TOTAL_UPLOAD, 0),
+                        "totalDownload" to intent.getLongExtra(VpnService.EXTRA_TOTAL_DOWNLOAD, 0)
+                    )
+                }
+                VpnService.ACTION_STATE_CHANGE -> {
+                    val state = intent.getStringExtra(VpnService.EXTRA_CONNECTION_STATE)
+                    Log.d(TAG, "State changed to: $state")
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupPlatformChannels()
         bindToVpnService()
+        registerBroadcastReceiver()
+    }
+    
+    private fun registerBroadcastReceiver() {
+        val filter = IntentFilter().apply {
+            addAction(VpnService.ACTION_STATS_UPDATE)
+            addAction(VpnService.ACTION_STATE_CHANGE)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(statsReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(statsReceiver, filter)
+        }
+    }
+    
+    private fun unregisterBroadcastReceiver() {
+        try {
+            unregisterReceiver(statsReceiver)
+        } catch (e: Exception) {
+            Log.w(TAG, "Receiver not registered: ${e.message}")
+        }
     }
 
     private fun bindToVpnService() {
-        // 尝试获取 VpnService 实例（如果正在运行）
-        // 简化实现：使用 ServiceConnection 绑定
+        // 使用 VpnService 单例获取实例
+        vpnService = VpnService.getInstance()
+        serviceBound = vpnService != null
+        Log.i(TAG, "VpnService bound: $serviceBound")
     }
 
     private fun setupPlatformChannels() {
@@ -82,6 +128,11 @@ class MainActivity : FlutterActivity() {
     private fun startStatsPolling() {
         statsRunnable = object : Runnable {
             override fun run() {
+                // 每次轮询时刷新 VpnService 引用
+                if (vpnService == null) {
+                    vpnService = VpnService.getInstance()
+                }
+                
                 vpnService?.let { service ->
                     val stats = service.getStats()
                     val state = service.connectionState.value
@@ -207,6 +258,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        unregisterBroadcastReceiver()
         serviceScope.cancel()
         stopStatsPolling()
     }

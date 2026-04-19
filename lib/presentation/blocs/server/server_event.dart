@@ -60,3 +60,12 @@ class ImportServerConfig extends ServerEvent {
   @override
   List<Object?> get props => [config];
 }
+
+class LookupServerLocation extends ServerEvent {
+  final String serverId;
+
+  const LookupServerLocation(this.serverId);
+
+  @override
+  List<Object?> get props => [serverId];
+}

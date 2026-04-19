@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:io' show Platform;
 import 'core/theme/app_theme.dart';
+import 'data/services/log_service.dart';
 import 'injection.dart';
 import 'presentation/blocs/vpn/vpn_bloc.dart';
 import 'presentation/blocs/vpn/vpn_event.dart';
@@ -31,12 +32,10 @@ void main() async {
     ),
   );
 
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
-
   await initDependencies();
+
+  // Log app startup
+  getIt<LogService>().i('NebulaVPN starting...');
 
   runApp(const NebulaVPNApp());
 }
