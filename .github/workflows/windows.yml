@@ -67,7 +67,6 @@ jobs:
           if ($exe) {
             $releaseDir = $exe.Directory.FullName
             Write-Host "Found release directory: $releaseDir"
-            Copy-Item -Path "$releaseDir\*" -Destination "build\windows\runner\Release" -Recurse -Force -ErrorAction SilentlyContinue
             New-Item -ItemType Directory -Path "build\windows\runner\Release" -Force | Out-Null
             Copy-Item -Path "$releaseDir\*" -Destination "build\windows\runner\Release" -Recurse -Force
             Write-Host "Files copied successfully"

@@ -17,7 +17,7 @@ class VpnHandler {
   
   void SetEventSink(std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& events);
   
-  void Connect(const flutter::EncodableMap& config, std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void Connect(flutter::EncodableMap config, std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
   void Disconnect(std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
   void GetStatus(std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
   
