@@ -11,10 +11,6 @@
 #include <thread>
 #include <mutex>
 
-#ifdef _WIN32
-#include <WinInet.h>
-#endif
-
 class VpnHandler {
  public:
   static VpnHandler& Instance();

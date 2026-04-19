@@ -6,14 +6,17 @@
 #include <chrono>
 #include <map>
 #include <psapi.h>
+#include <shlwapi.h>
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <winhttp.h>
+#include <ws2tcpip.h>
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "psapi.lib")
 #pragma comment(lib, "winhttp.lib")
+#pragma comment(lib, "shlwapi.lib")
 
 namespace {
   constexpr const char* V2RAY_VERSION = "v5.22.0";
@@ -313,20 +316,20 @@ bool VpnHandler::GenerateConfig(const flutter::EncodableMap& flutterConfig) {
   
   // 从 Flutter 配置中提取参数
   for (const auto& [key, value] : flutterConfig) {
-    if (key.IsString()) {
+    if (std::holds_alternative<std::string>(key)) {
       const std::string& keyStr = std::get<std::string>(key);
       
-      if (keyStr == "protocol" && value.IsString()) {
+      if (keyStr == "protocol" && std::holds_alternative<std::string>(value)) {
         protocol = std::get<std::string>(value);
-      } else if (keyStr == "address" && value.IsString()) {
+      } else if (keyStr == "address" && std::holds_alternative<std::string>(value)) {
         address = std::get<std::string>(value);
-      } else if (keyStr == "port" && value.IsInt()) {
+      } else if (keyStr == "port" && std::holds_alternative<int>(value)) {
         port = std::get<int>(value);
-      } else if (keyStr == "uuid" && value.IsString()) {
+      } else if (keyStr == "uuid" && std::holds_alternative<std::string>(value)) {
         uuid = std::get<std::string>(value);
-      } else if (keyStr == "security" && value.IsString()) {
+      } else if (keyStr == "security" && std::holds_alternative<std::string>(value)) {
         security = std::get<std::string>(value);
-      } else if (keyStr == "network" && value.IsString()) {
+      } else if (keyStr == "network" && std::holds_alternative<std::string>(value)) {
         network = std::get<std::string>(value);
       }
     }
@@ -574,7 +577,7 @@ void VpnHandler::HandleMethodCall(
     
     // 从参数中提取 config
     auto configIt = arguments->find(flutter::EncodableValue("config"));
-    if (configIt == arguments->end() || !configIt->second.IsMap()) {
+    if (configIt == arguments->end() || !std::holds_alternative<flutter::EncodableMap>(configIt->second)) {
       result->Error("INVALID_CONFIG", "config field is required");
       return;
     }
