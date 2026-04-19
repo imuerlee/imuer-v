@@ -112,14 +112,16 @@ void VpnHandler::OnListen(
     const flutter::EncodableValue* arguments,
     std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& events) {
   LOGD("VpnHandler", "OnListen: starting");
-  LOGD_STR("VpnHandler", "OnListen: arguments=" + (arguments ? "not null" : "null"));
+  std::string argsStr = arguments ? "not null" : "null";
+  LOGD_STR("VpnHandler", std::string("OnListen: arguments=") + argsStr);
   SetEventSink(std::move(events));
   LOGD("VpnHandler", "OnListen: completed");
 }
 
 void VpnHandler::OnCancel(const flutter::EncodableValue* arguments) {
   LOGD("VpnHandler", "OnCancel: starting");
-  LOGD_STR("VpnHandler", "OnCancel: arguments=" + (arguments ? "not null" : "null"));
+  std::string argsStr = arguments ? "not null" : "null";
+  LOGD_STR("VpnHandler", std::string("OnCancel: arguments=") + argsStr);
   
   std::lock_guard<std::mutex> lock(mutex_);
   event_sink_.reset();

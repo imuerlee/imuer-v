@@ -30,6 +30,7 @@ class MainActivity : FlutterActivity() {
         fun logI(msg: String) { Log.i(TAG, "[I] $msg") }
         fun logW(msg: String) { Log.w(TAG, "[W] $msg") }
         fun logE(msg: String) { Log.e(TAG, "[E] $msg") }
+        fun logE(msg: String, e: Throwable) { Log.e(TAG, "[E] $msg", e) }
     }
 
     private val methodChannel get() = MethodChannel(flutterEngine!!.dartExecutor.binaryMessenger, METHOD_CHANNEL)

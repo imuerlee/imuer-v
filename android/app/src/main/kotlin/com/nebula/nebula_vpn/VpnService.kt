@@ -734,7 +734,7 @@ class VpnService : AndroidVpnService() {
             
             logI("startV2Ray: calling processBuilder.start()")
             v2rayProcess = processBuilder.start()
-            logI("startV2Ray: process started, pid=${v2rayProcess?.pid}")
+            logI("startV2Ray: process started")
             
             // 读取 v2ray 输出
             logI("startV2Ray: starting output reader thread")
