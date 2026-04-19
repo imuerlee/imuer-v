@@ -241,7 +241,7 @@ bool VpnHandler::DownloadFile(const std::string& url, const std::string& destPat
   urlComponents.lpszUrlPath = urlPath;
   urlComponents.dwUrlPathLength = 1024;
   
-  if (!WinHttpCrackUrl(urlW.c_str(), urlW.length(), 0, &urlComponents)) {
+  if (!WinHttpCrackUrl(urlW.c_str(), static_cast<DWORD>(urlW.length()), 0, &urlComponents)) {
     WinHttpCloseHandle(hSession);
     return false;
   }
