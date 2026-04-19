@@ -201,38 +201,51 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun handleConnect(call: MethodCall, result: MethodChannel.Result) {
+        Log.i(TAG, "handleConnect called")
         val config = call.argument<Map<String, Any>>("config")
+        Log.i(TAG, "handleConnect: config = $config")
+        
         if (config == null) {
+            Log.e(TAG, "handleConnect: config is null")
             result.error("INVALID_CONFIG", "Configuration is required", null)
             return
         }
 
         val vpnIntent = android.net.VpnService.prepare(this)
+        Log.i(TAG, "handleConnect: vpnIntent = $vpnIntent")
+        
         if (vpnIntent != null) {
             // 需要权限，保存 config 等授权完成后启动
             pendingConfig = config
+            Log.i(TAG, "handleConnect: requesting VPN permission")
             startActivityForResult(vpnIntent, VPN_PERMISSION_REQUEST_CODE)
             result.success(true)
             return
         }
 
         // 直接启动 VPN 服务
+        Log.i(TAG, "handleConnect: starting VPN service directly")
         startVpnService(config)
         Log.i(TAG, "VPN connect initiated")
         result.success(true)
     }
     
     private fun startVpnService(config: Map<String, Any>) {
+        Log.i(TAG, "startVpnService: creating intent")
         val intent = Intent(this, VpnService::class.java).apply {
             action = VpnService.ACTION_CONNECT
             putExtra("config", HashMap<String, Any>(config))
         }
+        Log.i(TAG, "startVpnService: starting service")
         
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            Log.i(TAG, "startVpnService: using startForegroundService")
             startForegroundService(intent)
         } else {
+            Log.i(TAG, "startVpnService: using startService")
             startService(intent)
         }
+        Log.i(TAG, "startVpnService: service started")
     }
 
     private fun handleDisconnect(result: MethodChannel.Result) {
@@ -267,14 +280,18 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        Log.i(TAG, "onActivityResult: requestCode=$requestCode, resultCode=$resultCode")
         
         if (requestCode == VPN_PERMISSION_REQUEST_CODE) {
             if (resultCode == RESULT_OK) {
                 Log.i(TAG, "VPN permission granted")
                 // 权限授予后启动 VPN 服务
                 pendingConfig?.let { config ->
+                    Log.i(TAG, "onActivityResult: starting VPN with pending config")
                     startVpnService(config)
                     pendingConfig = null
+                } ?: run {
+                    Log.w(TAG, "onActivityResult: pendingConfig is null")
                 }
             } else {
                 Log.e(TAG, "VPN permission denied")

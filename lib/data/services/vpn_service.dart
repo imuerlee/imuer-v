@@ -31,6 +31,8 @@ class VpnService {
   Future<bool> connect(ServerNode server) async {
     try {
       final config = server.toJson();
+      print('VpnService.connect: config = $config');
+      print('VpnService.connect: server = ${server.name}, ${server.address}, ${server.port}');
       
       if (Platform.isWindows) {
         // Windows: 调用 v2ray-core
@@ -38,18 +40,22 @@ class VpnService {
           'config': config,
           'platform': 'windows',
         });
+        print('VpnService.connect: Windows result = $result');
         return result ?? false;
       } else if (Platform.isAndroid) {
         // Android: 使用系统 VPN Service
+        print('VpnService.connect: Calling Android method channel...');
         final result = await _methodChannel.invokeMethod<bool>('connect', {
           'config': config,
           'platform': 'android',
         });
+        print('VpnService.connect: Android result = $result');
         return result ?? false;
       }
       
       return false;
     } on PlatformException catch (e) {
+      print('VpnService.connect: PlatformException = ${e.code}, ${e.message}');
       // 区分不同类型的错误
       if (e.code == 'UNAVAILABLE') {
         // 服务未启动
@@ -63,6 +69,7 @@ class VpnService {
       }
       return false;
     } catch (e) {
+      print('VpnService.connect: Exception = $e');
       return false;
     }
   }

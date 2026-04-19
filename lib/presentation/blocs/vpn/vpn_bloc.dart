@@ -60,6 +60,8 @@ class VpnBloc extends Bloc<VpnEvent, VpnState> {
   }
 
   Future<void> _onConnectVpn(ConnectVpn event, Emitter<VpnState> emit) async {
+    print('VpnBloc._onConnectVpn: starting');
+    
     emit(state.copyWith(
       isLoading: true,
       connection: state.connection.copyWith(status: VpnStatus.connecting),
@@ -71,6 +73,7 @@ class VpnBloc extends Bloc<VpnEvent, VpnState> {
       if (serverId.isEmpty) {
         serverId = _preferences.selectedServerId ?? '';
       }
+      print('VpnBloc._onConnectVpn: serverId = $serverId');
       
       if (serverId.isEmpty) {
         emit(state.copyWith(
@@ -82,6 +85,7 @@ class VpnBloc extends Bloc<VpnEvent, VpnState> {
       }
 
       final server = await _database.getServerById(serverId);
+      print('VpnBloc._onConnectVpn: server = ${server?.name}, ${server?.address}');
       if (server == null) {
         emit(state.copyWith(
           isLoading: false,
@@ -92,7 +96,9 @@ class VpnBloc extends Bloc<VpnEvent, VpnState> {
       }
 
       // 实际启动 VPN 连接
+      print('VpnBloc._onConnectVpn: calling _vpnService.connect');
       final success = await _vpnService.connect(server);
+      print('VpnBloc._onConnectVpn: connect result = $success');
       
       if (!success) {
         emit(state.copyWith(
@@ -120,6 +126,7 @@ class VpnBloc extends Bloc<VpnEvent, VpnState> {
 
       _preferences.selectedServerId = serverId;
     } catch (e) {
+      print('VpnBloc._onConnectVpn: Exception = $e');
       emit(state.copyWith(
         isLoading: false,
         errorMessage: 'Connection error: ${e.toString()}',

@@ -88,12 +88,15 @@ class VpnService : AndroidVpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.i(TAG, "VpnService.onStartCommand: action=${intent?.action}")
         when (intent?.action) {
             ACTION_CONNECT -> {
                 val config = intent.getSerializableExtra("config") as? Map<String, Any>
+                Log.i(TAG, "VpnService.onStartCommand: CONNECT, config=$config")
                 connect(config)
             }
             ACTION_DISCONNECT -> {
+                Log.i(TAG, "VpnService.onStartCommand: DISCONNECT")
                 disconnect()
             }
         }
@@ -157,9 +160,11 @@ class VpnService : AndroidVpnService() {
     }
 
     private fun connect(config: Map<String, Any>?) {
+        Log.i(TAG, "VpnService.connect: starting")
         serviceScope.launch {
             try {
                 // 立即启动前台通知，显示"连接中"
+                Log.i(TAG, "VpnService.connect: starting foreground notification")
                 startForegroundWithNotification("Nebula VPN", "Connecting...")
                 
                 _connectionState.value = ConnectionState.CONNECTING
@@ -168,15 +173,20 @@ class VpnService : AndroidVpnService() {
                 serverConfig = config
                 
                 // 检查并下载 v2ray-core
+                Log.i(TAG, "VpnService.connect: checking v2ray-core")
                 if (!checkV2RayCore()) {
                     updateNotification("Nebula VPN", "Failed to download v2ray-core")
                     throw IllegalStateException("Failed to prepare v2ray-core")
                 }
+                Log.i(TAG, "VpnService.connect: v2ray-core ready")
                 
                 // 生成配置文件
+                Log.i(TAG, "VpnService.connect: generating config")
                 val configPath = generateConfig(config)
+                Log.i(TAG, "VpnService.connect: configPath = $configPath")
                 
                 // 准备 VpnService.Builder
+                Log.i(TAG, "VpnService.connect: establishing VPN")
                 val builder = Builder()
                     .addAddress(VPN_ADDRESS, 24)
                     .addAddress(VPN_ADDRESS_V6, 64)
@@ -195,7 +205,9 @@ class VpnService : AndroidVpnService() {
                 builder.addDisallowedApplication(packageName)
                 
                 // 建立 VPN 连接
+                Log.i(TAG, "VpnService.connect: calling builder.establish()")
                 vpnFileDescriptor = builder.establish()
+                Log.i(TAG, "VpnService.connect: vpnFileDescriptor = $vpnFileDescriptor")
                     ?: throw IllegalStateException("Failed to establish VPN connection")
                 
                 // 设置系统代理
@@ -231,7 +243,8 @@ class VpnService : AndroidVpnService() {
                 Log.i(TAG, "VPN connected successfully")
                 
             } catch (e: Exception) {
-                Log.e(TAG, "Connection failed: ${e.message}")
+                Log.e(TAG, "Connection failed: ${e.message}", e)
+                Log.e(TAG, "Connection failed: stacktrace = ${e.stackTrace}")
                 _connectionState.value = ConnectionState.ERROR
                 sendStateChange()
                 disconnect()
