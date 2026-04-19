@@ -6,12 +6,14 @@
 #include <chrono>
 #include <map>
 #include <psapi.h>
-#include <ws2tcpip.h>
-#include <wininet.h>
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <winhttp.h>
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "psapi.lib")
-#pragma comment(lib, "wininet.lib")
+#pragma comment(lib, "winhttp.lib")
 
 namespace {
   constexpr const char* V2RAY_VERSION = "v5.22.0";
@@ -217,36 +219,90 @@ bool VpnHandler::DownloadV2RayCore() {
 }
 
 bool VpnHandler::DownloadFile(const std::string& url, const std::string& destPath) {
-  HINTERNET hInternet = InternetOpenA("NebulaVPN/1.0", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
-  if (!hInternet) {
+  // Use WinHTTP for downloading
+  HINTERNET hSession = WinHttpOpen(L"NebulaVPN/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, NULL, NULL, 0);
+  if (!hSession) {
     return false;
   }
   
-  HINTERNET hUrl = InternetOpenUrlA(hInternet, url.c_str(), NULL, 0, 
-                                     INTERNET_FLAG_RELOAD | INTERNET_FLAG_SECURE, 0);
-  if (!hUrl) {
-    InternetCloseHandle(hInternet);
+  // Parse URL
+  URL_COMPONENTS urlComponents = {};
+  urlComponents.dwStructSize = sizeof(urlComponents);
+  std::wstring urlW(url.begin(), url.end());
+  
+  wchar_t hostName[256] = {};
+  wchar_t urlPath[1024] = {};
+  urlComponents.lpszHostName = hostName;
+  urlComponents.dwHostNameLength = 256;
+  urlComponents.lpszUrlPath = urlPath;
+  urlComponents.dwUrlPathLength = 1024;
+  
+  if (!WinHttpCrackUrl(urlW.c_str(), urlW.length(), 0, &urlComponents)) {
+    WinHttpCloseHandle(hSession);
     return false;
   }
   
-  HANDLE hFile = CreateFileA(destPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, 
-                              CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+  // Connect
+  HINTERNET hConnect = WinHttpConnect(hSession, hostName, urlComponents.nPort, 0);
+  if (!hConnect) {
+    WinHttpCloseHandle(hSession);
+    return false;
+  }
+  
+  // Open request
+  DWORD flags = (urlComponents.nScheme == INTERNET_SCHEME_HTTPS) ? WINHTTP_FLAG_SECURE : 0;
+  HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", urlPath, NULL, NULL, NULL, flags);
+  if (!hRequest) {
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
+    return false;
+  }
+  
+  // Send request
+  BOOL result = WinHttpSendRequest(hRequest, NULL, 0, NULL, 0, 0, 0);
+  if (!result) {
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
+    return false;
+  }
+  
+  // Receive response
+  result = WinHttpReceiveResponse(hRequest, NULL);
+  if (!result) {
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
+    return false;
+  }
+  
+  // Open file for writing
+  HANDLE hFile = CreateFileA(destPath.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
   if (hFile == INVALID_HANDLE_VALUE) {
-    InternetCloseHandle(hUrl);
-    InternetCloseHandle(hInternet);
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
     return false;
   }
   
+  // Read data
   char buffer[8192];
   DWORD bytesRead, bytesWritten;
+  BOOL readResult = TRUE;
   
-  while (InternetReadFile(hUrl, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0) {
-    WriteFile(hFile, buffer, bytesRead, &bytesWritten, NULL);
+  while (readResult) {
+    readResult = WinHttpReadData(hRequest, buffer, sizeof(buffer), &bytesRead);
+    if (readResult && bytesRead > 0) {
+      WriteFile(hFile, buffer, bytesRead, &bytesWritten, NULL);
+    } else {
+      break;
+    }
   }
   
   CloseHandle(hFile);
-  InternetCloseHandle(hUrl);
-  InternetCloseHandle(hInternet);
+  WinHttpCloseHandle(hRequest);
+  WinHttpCloseHandle(hConnect);
+  WinHttpCloseHandle(hSession);
   
   return true;
 }
