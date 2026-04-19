@@ -544,6 +544,9 @@ bool VpnHandler::GenerateConfig(const flutter::EncodableMap& flutterConfig) {
     "log": {
       "loglevel": "warning"
     },
+    "dns": {
+      "servers": ["8.8.8.8", "1.1.1.1"]
+    },
     "inbounds": [{
       "port": 10808,
       "protocol": "socks",

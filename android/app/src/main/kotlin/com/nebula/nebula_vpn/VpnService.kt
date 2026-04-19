@@ -660,6 +660,7 @@ class VpnService : AndroidVpnService() {
         val configJson = buildString {
             append("{")
             append("\"log\":{\"loglevel\":\"warning\"},")
+            append("\"dns\":{\"servers\":[\"8.8.8.8\",\"1.1.1.1\"]},")
             append("\"inbounds\":[{")
             append("\"port\":$PROXY_PORT,")
             append("\"protocol\":\"socks\",")
@@ -679,8 +680,8 @@ class VpnService : AndroidVpnService() {
             append("\"security\":\"$streamSecurity\"")
             append("},")
             append("\"tag\":\"proxy\"")
-            append("}")
-            append("]")
+            append("}],")
+            append("\"routing\":{\"domainStrategy\":\"AsIs\",\"rules\":[{\"type\":\"field\",\"ip\":[\"geoip:private\"],\"outboundTag\":\"direct\"}]}")
             append("}")
         }
         
@@ -734,14 +735,20 @@ class VpnService : AndroidVpnService() {
             
             logI("startV2Ray: calling processBuilder.start()")
             v2rayProcess = processBuilder.start()
-            logI("startV2Ray: process started")
+            logI("startV2Ray: process started, pid=${v2rayProcess?.pid}")
             
-            // 读取 v2ray 输出
-            logI("startV2Ray: starting output reader thread")
-            v2rayProcess?.inputStream?.bufferedReader()?.forEachLine { line ->
-                logD("v2ray: $line")
-            }
-            logI("startV2Ray: output reader finished")
+            // 在独立线程中读取 v2ray 输出（非阻塞）
+            logI("startV2Ray: starting output reader thread (non-blocking)")
+            Thread {
+                try {
+                    v2rayProcess?.inputStream?.bufferedReader()?.forEachLine { line ->
+                        Log.d(TAG, "v2ray: $line")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "v2ray output reader exception: ${e.message}")
+                }
+            }.start()
+            logI("startV2Ray: output reader thread started")
             
         } catch (e: Exception) {
             logE("startV2Ray: EXCEPTION: ${e.message}", e)
