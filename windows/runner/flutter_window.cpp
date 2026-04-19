@@ -91,15 +91,18 @@ class VpnStreamHandler : public flutter::StreamHandler<flutter::EncodableValue> 
 };
 
 void FlutterWindow::SetupVpnChannels() {
-  // Create method channel - use default codec
+  // Create method channel
+  auto messenger = flutter_controller_->engine()->messenger();
   vpn_method_channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
-      flutter_controller_->engine()->messenger(),
-      "nebula_vpn/method");
+      messenger,
+      "nebula_vpn/method",
+      &flutter::StandardMethodCodec::GetInstance());
 
-  // Create event channel - use default codec
+  // Create event channel - uses same codec as method channel
   vpn_event_channel_ = std::make_unique<flutter::EventChannel<flutter::EncodableValue>>(
-      flutter_controller_->engine()->messenger(),
-      "nebula_vpn/events");
+      messenger,
+      "nebula_vpn/events",
+      &flutter::StandardMethodCodec::GetInstance());
 
   // Set method call handler
   vpn_method_channel_->SetMethodCallHandler(
