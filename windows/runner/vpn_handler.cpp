@@ -5,18 +5,20 @@
 #include <sstream>
 #include <chrono>
 #include <map>
-#include <psapi.h>
-#include <shlwapi.h>
+
+// Ws2tcpip.h must be included BEFORE windows.h to avoid winsock/winsock2 conflicts
+#include <ws2tcpip.h>
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <winhttp.h>
-#include <ws2tcpip.h>
+#include <shlwapi.h>
+#include <psapi.h>
 
 #pragma comment(lib, "ws2_32.lib")
-#pragma comment(lib, "psapi.lib")
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "shlwapi.lib")
+#pragma comment(lib, "psapi.lib")
 
 namespace {
   constexpr const char* V2RAY_VERSION = "v5.22.0";
