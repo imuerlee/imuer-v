@@ -109,6 +109,5 @@ void FlutterWindow::SetupVpnChannels() {
       });
 
   // Set stream handler for event channel
-  static VpnStreamHandler vpn_stream_handler;
-  vpn_event_channel_->SetStreamHandler(&vpn_stream_handler);
+  vpn_event_channel_->SetStreamHandler(std::make_unique<VpnStreamHandler>());
 }
