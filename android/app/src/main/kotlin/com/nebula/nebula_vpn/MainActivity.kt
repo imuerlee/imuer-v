@@ -48,6 +48,9 @@ class MainActivity : FlutterActivity() {
     private var vpnService: VpnService? = null
     private var serviceBound = false
     
+    // 等待 VPN 权限的 config
+    private var pendingConfig: Map<String, Any>? = null
+    
     // 广播接收器
     private val statsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -206,11 +209,20 @@ class MainActivity : FlutterActivity() {
 
         val vpnIntent = android.net.VpnService.prepare(this)
         if (vpnIntent != null) {
+            // 需要权限，保存 config 等授权完成后启动
+            pendingConfig = config
             startActivityForResult(vpnIntent, VPN_PERMISSION_REQUEST_CODE)
             result.success(true)
             return
         }
 
+        // 直接启动 VPN 服务
+        startVpnService(config)
+        Log.i(TAG, "VPN connect initiated")
+        result.success(true)
+    }
+    
+    private fun startVpnService(config: Map<String, Any>) {
         val intent = Intent(this, VpnService::class.java).apply {
             action = VpnService.ACTION_CONNECT
             putExtra("config", HashMap<String, Any>(config))
@@ -221,9 +233,6 @@ class MainActivity : FlutterActivity() {
         } else {
             startService(intent)
         }
-
-        Log.i(TAG, "VPN connect initiated")
-        result.success(true)
     }
 
     private fun handleDisconnect(result: MethodChannel.Result) {
@@ -262,8 +271,14 @@ class MainActivity : FlutterActivity() {
         if (requestCode == VPN_PERMISSION_REQUEST_CODE) {
             if (resultCode == RESULT_OK) {
                 Log.i(TAG, "VPN permission granted")
+                // 权限授予后启动 VPN 服务
+                pendingConfig?.let { config ->
+                    startVpnService(config)
+                    pendingConfig = null
+                }
             } else {
                 Log.e(TAG, "VPN permission denied")
+                pendingConfig = null
                 sendEvent("error", mapOf("message" to "VPN permission denied"))
             }
         }
