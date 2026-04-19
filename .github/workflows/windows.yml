@@ -76,6 +76,21 @@ jobs:
             Get-ChildItem -Path "build" -Recurse -Filter "*.exe" | Select-Object -First 10
           }
 
+      - name: Copy v2ray-core to release
+        shell: pwsh
+        run: |
+          $v2raySrc = "windows\v2ray"
+          $releasePath = "build\windows\runner\Release"
+          if (Test-Path $v2raySrc) {
+            New-Item -ItemType Directory -Force -Path "$releasePath\v2ray" | Out-Null
+            Copy-Item -Path "$v2raySrc\*" -Destination "$releasePath\v2ray" -Recurse -Force
+            Write-Host "Copied v2ray-core to release directory"
+            Get-ChildItem "$releasePath\v2ray"
+          } else {
+            Write-Host "ERROR: v2ray source directory not found at $v2raySrc"
+            exit 1
+          }
+
       - name: Create ZIP archive
         shell: pwsh
         run: |
