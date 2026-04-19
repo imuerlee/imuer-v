@@ -6,19 +6,18 @@
 #include <chrono>
 #include <map>
 
-// Ws2tcpip.h must be included BEFORE windows.h to avoid winsock/winsock2 conflicts
-#include <ws2tcpip.h>
-
 #define WIN32_LEAN_AND_MEAN
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <windows.h>
 #include <winhttp.h>
 #include <shlwapi.h>
 #include <psapi.h>
+#include <iphlpapi.h>
 
-#pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "psapi.lib")
+#pragma comment(lib, "iphlpapi.lib")
 
 namespace {
   constexpr const char* V2RAY_VERSION = "v5.22.0";
@@ -504,48 +503,26 @@ void VpnHandler::CollectTrafficStats() {
 }
 
 bool VpnHandler::TestConnection() {
-  WSADATA wsaData;
-  if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-    return false;
+  // Use WinHTTP to test connection
+  BOOL result = FALSE;
+  HINTERNET hSession = WinHttpOpen(L"NebulaVPN/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, NULL, NULL, 0);
+  if (hSession) {
+    HINTERNET hConnect = WinHttpConnect(hSession, L"www.google.com", INTERNET_DEFAULT_HTTPS_PORT, 0);
+    if (hConnect) {
+      HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", L"/", NULL, NULL, 
+        WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
+      if (hRequest) {
+        result = WinHttpSendRequest(hRequest, NULL, 0, NULL, 0, 0, 0);
+        if (result) {
+          result = WinHttpReceiveResponse(hRequest, NULL);
+        }
+        WinHttpCloseHandle(hRequest);
+      }
+      WinHttpCloseHandle(hConnect);
+    }
+    WinHttpCloseHandle(hSession);
   }
-  
-  SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if (sock == INVALID_SOCKET) {
-    WSACleanup();
-    return false;
-  }
-  
-  u_long mode = 1;
-  ioctlsocket(sock, FIONBIO, &mode);
-  
-  sockaddr_in server = {};
-  server.sin_family = AF_INET;
-  inet_pton(AF_INET, "8.8.8.8", &server.sin_addr);
-  server.sin_port = htons(53);
-  
-  int result = connect(sock, (sockaddr*)&server, sizeof(server));
-  if (result == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK) {
-    closesocket(sock);
-    WSACleanup();
-    return false;
-  }
-  
-  fd_set fdWrite;
-  FD_ZERO(&fdWrite);
-  FD_SET(sock, &fdWrite);
-  
-  timeval timeout = {};
-  timeout.tv_sec = CONNECTION_TIMEOUT_MS / 1000;
-  timeout.tv_usec = (CONNECTION_TIMEOUT_MS % 1000) * 1000;
-  
-  result = select(0, NULL, &fdWrite, NULL, &timeout);
-  mode = 0;
-  ioctlsocket(sock, FIONBIO, &mode);
-  
-  closesocket(sock);
-  WSACleanup();
-  
-  return (result > 0);
+  return result == TRUE;
 }
 
 std::string VpnHandler::GetAppDataPath() {
