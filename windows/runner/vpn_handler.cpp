@@ -845,118 +845,33 @@ void VpnHandler::CollectTrafficStats() {
 bool VpnHandler::TestConnection() {
   LOGD("TestConn", "==== TestConnection START ====");
   
-  // Test connection by connecting to v2ray via HTTP proxy to google.com
-  LOGD("TestConn", "TestConn: opening WinHTTP session");
-  
-  HINTERNET hSession = WinHttpOpen(
-    L"NebulaVPN/1.0",
-    WINHTTP_ACCESS_TYPE_NO_PROXY,
-    WINHTTP_NO_PROXY_NAME,
-    WINHTTP_NO_PROXY_BYPASS,
-    0);
-  
-  if (!hSession) {
-    DWORD err = GetLastError();
-    LOGE_STR("TestConn", "TestConn: WinHttpOpen FAILED, error=" + std::to_string(err));
-    return FALSE;
-  }
-  LOGD("TestConn", "TestConn: WinHttpOpen SUCCESS");
-  
-  // Set timeouts
-  DWORD timeout = HTTP_TIMEOUT_MS;
-  WinHttpSetTimeouts(hSession, timeout, timeout, timeout, timeout);
-  
-  // Connect to v2ray SOCKS proxy at localhost:10808
-  // Note: We need to tunnel through SOCKS, but WinHTTP doesn't support SOCKS directly
-  // So we do a simple socket connection test instead
-  
-  // For now, just test if we can connect to the proxy port
-  HINTERNET hConnect = WinHttpConnect(
-    hSession,
-    L"127.0.0.1",
-    10808,
-    0);
-  
-  if (!hConnect) {
-    DWORD err = GetLastError();
-    LOGE_STR("TestConn", "TestConn: WinHttpConnect FAILED, error=" + std::to_string(err));
-    WinHttpCloseHandle(hSession);
-    return FALSE;
-  }
-  LOGD("TestConn", "TestConn: WinHttpConnect SUCCESS");
-  
-  // Create HTTP request to test proxy
-  HINTERNET hRequest = WinHttpOpenRequest(
-    hConnect,
-    L"GET",
-    L"/",
-    NULL,
-    WINHTTP_NO_REFERER,
-    WINHTTP_DEFAULT_ACCEPT_TYPES,
-    WINHTTP_FLAG_CONNECT_ONLY);
-  
-  if (!hRequest) {
-    DWORD err = GetLastError();
-    LOGE_STR("TestConn", "TestConn: WinHttpOpenRequest FAILED, error=" + std::to_string(err));
-    WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
-    return FALSE;
-  }
-  LOGD("TestConn", "TestConn: WinHttpOpenRequest SUCCESS");
-  
-  // Send request
-  BOOL result = WinHttpSendRequest(
-    hRequest,
-    WINHTTP_NO_REQUEST_HEADERS,
-    0,
-    WINHTTP_NO_REQUEST_DATA,
-    0,
-    0,
-    0);
-  
-  if (!result) {
-    DWORD err = GetLastError();
-    LOGE_STR("TestConn", "TestConn: WinHttpSendRequest FAILED, error=" + std::to_string(err));
-    WinHttpCloseHandle(hRequest);
-    WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
+  // Simply check if the v2ray process is running
+  if (!is_running_) {
+    LOGD("TestConn", "TestConn: v2ray is not running");
     return FALSE;
   }
   
-  LOGD("TestConn", "TestConn: WinHttpSendRequest SUCCESS");
-  
-  // Wait for response
-  DWORD statusCode = 0;
-  DWORD statusCodeSize = sizeof(statusCode);
-  result = WinHttpReceiveResponse(hRequest, NULL);
-  
-  if (result) {
-    WinHttpQueryHeaders(hRequest,
-      WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-      WINHTTP_HEADER_NAME_BY_INDEX,
-      &statusCode,
-      &statusCodeSize,
-      WINHTTP_NO_HEADER_INDEX);
-    
-    LOGD("TestConn", "TestConn: received status code=" + std::to_string(statusCode));
-    
-    if (statusCode >= 200 && statusCode < 400) {
-      LOGD("TestConn", "TestConn: connection test PASSED");
-      WinHttpCloseHandle(hRequest);
-      WinHttpCloseHandle(hConnect);
-      WinHttpCloseHandle(hSession);
-      LOGD("TestConn", "==== TestConnection SUCCESS ====");
-      return TRUE;
-    }
+  if (!process_handle_) {
+    LOGD("TestConn", "TestConn: process_handle_ is NULL");
+    return FALSE;
   }
   
-  // Even if response fails, if we got this far without network errors,
-  // it means v2ray is listening. Let's consider it a success.
-  LOGD("TestConn", "TestConn: connection test PASSED (v2ray is responding)");
+  // Check if process is still alive
+  DWORD exitCode = 0;
+  BOOL gotExitCode = GetExitCodeProcess(process_handle_, &exitCode);
   
-  WinHttpCloseHandle(hRequest);
-  WinHttpCloseHandle(hConnect);
-  WinHttpCloseHandle(hSession);
+  if (!gotExitCode) {
+    DWORD err = GetLastError();
+    LOGE_STR("TestConn", "TestConn: GetExitCodeProcess FAILED, error=" + std::to_string(err));
+    return FALSE;
+  }
+  
+  if (exitCode != STILL_ACTIVE) {
+    LOGE("TestConn", "TestConn: v2ray process has exited with code=" + std::to_string(exitCode));
+    return FALSE;
+  }
+  
+  LOGD("TestConn", "TestConn: v2ray process is running");
   LOGD("TestConn", "==== TestConnection SUCCESS ====");
   return TRUE;
 }

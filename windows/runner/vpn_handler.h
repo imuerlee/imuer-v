@@ -4,6 +4,7 @@
 #include <flutter/method_channel.h>
 #include <flutter/event_channel.h>
 #include <flutter/encodable_value.h>
+#include <windows.h>
 #include <string>
 #include <memory>
 #include <atomic>
