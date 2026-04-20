@@ -7,7 +7,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.net.ProxyInfo
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import android.util.Log
@@ -16,6 +15,7 @@ import com.nebula.nebula_vpn.MainActivity
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import kotlin.concurrent.thread
@@ -53,14 +53,12 @@ class VpnService : VpnService() {
     private var vpnInterface: ParcelFileDescriptor? = null
     private var forwarderThread: Thread? = null
     private var statsThread: Thread? = null
+    private var v2rayProcess: Process? = null
     
     private var totalUpload: Long = 0
     private var totalDownload: Long = 0
     
     private var serverConfig: Map<String, Any>? = null
-    
-    // v2ray process
-    private var v2rayProcess: Process? = null
     
     override fun onCreate() {
         super.onCreate()
@@ -115,26 +113,26 @@ class VpnService : VpnService() {
             try {
                 // Step 1: Copy v2ray binary
                 logI("startVpn: Step 1 - Copying v2ray binary")
-                val v2rayPath = copyV2RayBinary()
+                copyV2RayBinary()
                 
-                // Step 2: Generate v2ray config (socks mode)
+                // Step 2: Generate v2ray config
                 logI("startVpn: Step 2 - Generating v2ray config")
                 val configPath = generateV2RayConfig(config)
                 
-                // Step 3: Start v2ray as socks proxy
+                // Step 3: Start v2ray
                 logI("startVpn: Step 3 - Starting v2ray")
-                startV2Ray(v2rayPath, configPath)
+                startV2Ray(configPath)
                 
                 // Step 4: Create VPN interface
                 logI("startVpn: Step 4 - Creating VPN interface")
                 createVpnInterface()
                 
-                // Step 5: Start traffic forwarder (TUN -> SOCKS)
+                // Step 5: Start traffic forwarding
                 logI("startVpn: Step 5 - Starting traffic forwarder")
                 startTrafficForwarder()
                 
-                // Step 6: Start stats collection
-                logI("startVpn: Step 6 - Starting stats collection")
+                // Step 6: Start stats
+                logI("startVpn: Step 6 - Starting stats")
                 startStatsCollection()
                 
                 logI("startVpn: VPN started successfully!")
@@ -151,14 +149,14 @@ class VpnService : VpnService() {
         logI("========== startVpn END ==========")
     }
     
-    private fun copyV2RayBinary(): String {
+    private fun copyV2RayBinary() {
         logI("copyV2RayBinary: Checking v2ray binary")
         
         val v2rayFile = File(filesDir, "v2ray")
         
         if (v2rayFile.exists() && v2rayFile.canExecute()) {
             logI("copyV2RayBinary: v2ray already exists")
-            return v2rayFile.absolutePath
+            return
         }
         
         logI("copyV2RayBinary: Copying v2ray from assets")
@@ -175,14 +173,11 @@ class VpnService : VpnService() {
             logE("copyV2RayBinary: Failed to copy v2ray: ${e.message}", e)
             throw e
         }
-        
-        return v2rayFile.absolutePath
     }
     
     private fun generateV2RayConfig(config: Map<String, Any>?): String {
         logI("generateV2RayConfig: Generating v2ray configuration")
         
-        // Parse config parameters
         val protocol = (config?.get("protocol") as? String) ?: "vmess"
         val address = (config?.get("address") as? String) ?: ""
         val port = (config?.get("port") as? Int) ?: 443
@@ -196,7 +191,6 @@ class VpnService : VpnService() {
         val useTls = port == 443
         val streamSecurity = if (useTls) "tls" else "none"
         
-        // SOCKS proxy config (v2ray listens on localhost for TUN-to-SOCKS forwarder)
         val configJson = """
         {
             "log": {
@@ -244,8 +238,6 @@ class VpnService : VpnService() {
         }
         """.trimIndent()
         
-        logD("generateV2RayConfig: configJson=$configJson")
-        
         val configFile = File(filesDir, "config.json")
         configFile.writeText(configJson)
         
@@ -254,9 +246,10 @@ class VpnService : VpnService() {
         return configFile.absolutePath
     }
     
-    private fun startV2Ray(v2rayPath: String, configPath: String) {
+    private fun startV2Ray(configPath: String) {
         logI("startV2Ray: Starting v2ray")
         
+        val v2rayPath = File(filesDir, "v2ray").absolutePath
         val v2rayFile = File(v2rayPath)
         
         if (!v2rayFile.exists()) {
@@ -285,10 +278,11 @@ class VpnService : VpnService() {
         }
         
         // Wait for v2ray to start
-        Thread.sleep(1000)
+        Thread.sleep(2000)
         
         if (v2rayProcess?.isAlive != true) {
             val exitCode = v2rayProcess?.exitValue() ?: -1
+            logE("startV2Ray: v2ray failed to start, exit code: $exitCode")
             throw Exception("v2ray failed to start, exit code: $exitCode")
         }
         
@@ -308,7 +302,6 @@ class VpnService : VpnService() {
             .setBlocking(true)
             .setMtu(1500)
         
-        // Exclude our app from VPN
         builder.addDisallowedApplication(packageName)
         
         vpnInterface = builder.establish()
@@ -335,24 +328,31 @@ class VpnService : VpnService() {
                 
                 while (isRunning) {
                     try {
-                        // Read IP packet from TUN interface
                         buffer.clear()
                         val length = inputStream.read(buffer.array())
                         
                         if (length > 0) {
-                            buffer.limit(length)
+                            totalUpload += length
                             
-                            // Extract destination from IP header
-                            val destIp = extractDestinationIp(buffer.array(), length)
-                            val destPort = extractDestinationPort(buffer.array(), length)
+                            // Parse IP header
+                            val version = (buffer.array()[0].toInt() shr 4) and 0xF
                             
-                            logD("startTrafficForwarder: packet length=$length, dest=$destIp:$destPort")
-                            
-                            // Forward to SOCKS proxy
-                            val success = forwardToSocks(buffer.array(), length, destIp, destPort)
-                            
-                            if (success) {
-                                totalUpload += length
+                            if (version == 4) {
+                                // IPv4
+                                val destIp = extractIpv4Dest(buffer.array())
+                                val destPort = extractTcpPort(buffer.array(), length)
+                                val protocol = buffer.array()[9].toInt() and 0xFF
+                                
+                                logD("startTrafficForwarder: IPv4 packet, proto=$protocol, dest=$destIp:$destPort, len=$length")
+                                
+                                if (protocol == 6) { // TCP
+                                    forwardTcpPacket(buffer.array(), length, outputStream)
+                                }
+                            } else if (version == 6) {
+                                // IPv6
+                                val destIp = extractIpv6Dest(buffer.array())
+                                val destPort = extractTcpPort(buffer.array(), length)
+                                logD("startTrafficForwarder: IPv6 packet, dest=$destIp:$destPort, len=$length")
                             }
                         }
                     } catch (e: Exception) {
@@ -370,84 +370,97 @@ class VpnService : VpnService() {
         }
     }
     
-    private fun forwardToSocks(packet: ByteArray, length: Int, destIp: String, destPort: Int): Boolean {
-        var socksSocket: java.net.Socket? = null
-        
+    private fun extractIpv4Dest(packet: ByteArray): String {
+        if (packet.size < 20) return "0.0.0.0"
+        return "${packet[16].toInt() and 0xFF}.${packet[17].toInt() and 0xFF}.${packet[18].toInt() and 0xFF}.${packet[19].toInt() and 0xFF}"
+    }
+    
+    private fun extractIpv6Dest(packet: ByteArray): String {
+        if (packet.size < 40) return "::"
+        val sb = StringBuilder()
+        for (i in 24..39 step 2) {
+            if (sb.isNotEmpty()) sb.append(":")
+            sb.append(String.format("%x", ((packet[i].toInt() and 0xFF) shl 8) or (packet[i+1].toInt() and 0xFF)))
+        }
+        return sb.toString()
+    }
+    
+    private fun extractTcpPort(packet: ByteArray, length: Int): Int {
+        if (length < 24) return 0
+        return ((packet[22].toInt() and 0xFF) shl 8) or (packet[23].toInt() and 0xFF)
+    }
+    
+    private fun forwardTcpPacket(packet: ByteArray, length: Int, tunOutput: FileOutputStream) {
+        var socket: java.net.Socket? = null
         try {
-            // Connect to v2ray SOCKS proxy
-            socksSocket = Socket()
-            socksSocket.connect(InetSocketAddress(PROXY_HOST, PROXY_PORT), 5000)
-            socksSocket.soTimeout = 5000
+            val destIp = extractIpv4Dest(packet)
+            val destPort = extractTcpPort(packet, length)
             
-            val outputStream = socksSocket.getOutputStream()
-            val inputStream = socksSocket.getInputStream()
+            // Connect to v2ray SOCKS proxy
+            socket = Socket()
+            socket.connect(InetSocketAddress(PROXY_HOST, PROXY_PORT), 5000)
+            socket.soTimeout = 10000
+            
+            val socksOut = socket.getOutputStream()
+            val socksIn = socket.getInputStream()
             
             // Build SOCKS5 CONNECT request
-            // Format: VER(1) + CMD(1) + RSV(1) + ATYP(1) + DST.ADDR + DST.PORT
             val ipParts = destIp.split(".").map { it.toInt().toByte() }
             val portBytes = byteArrayOf(
                 (destPort shr 8).toByte(),
                 (destPort and 0xFF).toByte()
             )
             
-            val socksRequest = byteArrayOf(
+            // SOCKS5 CONNECT: VER(1) + CMD(1) + RSV(1) + ATYP(1) + DST.ADDR + DST.PORT
+            val connectRequest = byteArrayOf(
                 0x05,  // SOCKS version
                 0x01,  // CMD: CONNECT
                 0x00,  // RSV
                 0x01   // ATYP: IPv4
             ) + ipParts.toByteArray() + portBytes
             
-            // Send SOCKS request
-            outputStream.write(socksRequest)
-            outputStream.flush()
+            socksOut.write(connectRequest)
+            socksOut.flush()
             
             // Read SOCKS response
             val response = ByteArray(10)
-            val respLen = inputStream.read(response)
+            val respLen = socksIn.read(response)
             
             if (respLen < 2 || response[1].toInt() != 0x00) {
-                logE("forwardToSocks: SOCKS request failed, response=${response.contentToString()}")
-                return false
+                logE("forwardTcpPacket: SOCKS CONNECT failed, response=${response.contentToString()}")
+                return
             }
             
-            // Send the actual packet data
-            outputStream.write(packet, 0, length)
-            outputStream.flush()
+            // Extract TCP header length to find data payload
+            val ihl = (packet[0].toInt() and 0x0F) * 4
+            val tcpDataLen = length - ihl
             
-            // Read response from SOCKS and write back to TUN
-            val responseBuffer = ByteBuffer.allocate(32767)
-            val responseLength = inputStream.read(responseBuffer.array())
+            if (tcpDataLen > 0) {
+                // Send data after TCP header
+                socksOut.write(packet, ihl, tcpDataLen)
+                socksOut.flush()
+            }
+            
+            // Read response from SOCKS proxy
+            val responseBuffer = ByteBuffer.allocate(65535)
+            val responseLength = socksIn.read(responseBuffer.array())
             
             if (responseLength > 0) {
-                // Write response back to TUN
-                // This would need proper implementation
                 totalDownload += responseLength
+                
+                // Build response packet (simplified - just copy data back)
+                // In a real implementation, we would rebuild the IP/TCP headers
+                responseBuffer.limit(responseLength)
             }
             
-            socksSocket.close()
-            return true
+            socket.close()
             
         } catch (e: Exception) {
-            logE("forwardToSocks: Exception: ${e.message}", e)
+            logE("forwardTcpPacket: Exception: ${e.message}", e)
             try {
-                socksSocket?.close()
+                socket?.close()
             } catch (e2: Exception) {}
-            return false
         }
-    }
-    
-    private fun extractDestinationIp(packet: ByteArray, length: Int): String {
-        if (length < 20) return "0.0.0.0"
-        
-        // IPv4: destination starts at offset 16
-        return "${packet[16].toInt() and 0xFF}.${packet[17].toInt() and 0xFF}.${packet[18].toInt() and 0xFF}.${packet[19].toInt() and 0xFF}"
-    }
-    
-    private fun extractDestinationPort(packet: ByteArray, length: Int): Int {
-        if (length < 24) return 0
-        
-        // IPv4: destination port starts at offset 22
-        return ((packet[22].toInt() and 0xFF) shl 8) or (packet[23].toInt() and 0xFF)
     }
     
     private fun startStatsCollection() {
@@ -455,7 +468,7 @@ class VpnService : VpnService() {
             while (isRunning) {
                 try {
                     Thread.sleep(1000)
-                    logD("stats: running=${isRunning}, totalUp=$totalUpload, totalDown=$totalDownload")
+                    logD("stats: totalUp=$totalUpload, totalDown=$totalDownload")
                 } catch (e: Exception) {
                     if (isRunning) {
                         logE("stats: Exception: ${e.message}", e)
@@ -473,11 +486,7 @@ class VpnService : VpnService() {
         try {
             forwarderThread?.interrupt()
             statsThread?.interrupt()
-            
-            // Stop v2ray
             v2rayProcess?.destroy()
-            
-            // Close VPN interface
             vpnInterface?.close()
         } catch (e: Exception) {
             logE("stopVpn: Exception: ${e.message}", e)
