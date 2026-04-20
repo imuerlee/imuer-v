@@ -55,4 +55,7 @@ flutter {
 dependencies {
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.0"
+    
+    // v2ray-android for VPN/TUN support
+    implementation 'com.github.V2Ray-Android:libv2ray:4.25.0'
 }
