@@ -17,6 +17,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.Socket
 import java.nio.ByteBuffer
 import kotlin.concurrent.thread
 
@@ -28,6 +29,14 @@ class VpnService : VpnService() {
         const val NOTIFICATION_ID = 1
         const val ACTION_CONNECT = "com.nebula.nebula_vpn.CONNECT"
         const val ACTION_DISCONNECT = "com.nebula.nebula_vpn.DISCONNECT"
+        const val ACTION_STATS_UPDATE = "com.nebula.nebula_vpn.STATS_UPDATE"
+        const val ACTION_STATE_CHANGE = "com.nebula.nebula_vpn.STATE_CHANGE"
+        
+        const val EXTRA_UPLOAD_SPEED = "uploadSpeed"
+        const val EXTRA_DOWNLOAD_SPEED = "downloadSpeed"
+        const val EXTRA_TOTAL_UPLOAD = "totalUpload"
+        const val EXTRA_TOTAL_DOWNLOAD = "totalDownload"
+        const val EXTRA_CONNECTION_STATE = "connectionState"
         
         const val VPN_ADDRESS = "10.0.0.2"
         const val VPN_ADDRESS_V6 = "fd00::2"
@@ -48,6 +57,18 @@ class VpnService : VpnService() {
         
         fun getInstance(): VpnService? = instance
         fun isRunning(): Boolean = isRunning
+        
+        // Callbacks for MainActivity
+        var onStatsUpdate: ((Map<String, Long>) -> Unit)? = null
+        var onStateChange: ((String) -> Unit)? = null
+    }
+    
+    enum class ConnectionState {
+        DISCONNECTED,
+        CONNECTING,
+        CONNECTED,
+        DISCONNECTING,
+        ERROR
     }
     
     private var vpnInterface: ParcelFileDescriptor? = null
@@ -55,8 +76,22 @@ class VpnService : VpnService() {
     private var statsThread: Thread? = null
     private var v2rayProcess: Process? = null
     
+    private var uploadSpeed: Long = 0
+    private var downloadSpeed: Long = 0
     private var totalUpload: Long = 0
     private var totalDownload: Long = 0
+    private var lastUpload: Long = 0
+    private var lastDownload: Long = 0
+    
+    private val _connectionState = ConnectionState.DISCONNECTED
+    val connectionState: ConnectionState get() = _connectionState
+    
+    fun getStats(): Map<String, Long> = mapOf(
+        "uploadSpeed" to uploadSpeed,
+        "downloadSpeed" to downloadSpeed,
+        "totalUpload" to totalUpload,
+        "totalDownload" to totalDownload
+    )
     
     private var serverConfig: Map<String, Any>? = null
     
@@ -391,7 +426,7 @@ class VpnService : VpnService() {
     }
     
     private fun forwardTcpPacket(packet: ByteArray, length: Int, tunOutput: FileOutputStream) {
-        var socket: java.net.Socket? = null
+        var socket: Socket? = null
         try {
             val destIp = extractIpv4Dest(packet)
             val destPort = extractTcpPort(packet, length)
@@ -453,13 +488,12 @@ class VpnService : VpnService() {
                 responseBuffer.limit(responseLength)
             }
             
-            socket.close()
-            
         } catch (e: Exception) {
             logE("forwardTcpPacket: Exception: ${e.message}", e)
+        } finally {
             try {
                 socket?.close()
-            } catch (e2: Exception) {}
+            } catch (e: Exception) {}
         }
     }
     
