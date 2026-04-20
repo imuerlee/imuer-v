@@ -52,7 +52,7 @@ class MainActivity : FlutterActivity() {
     )
     
     // 绑定到 VpnService
-    private var vpnService: VpnService? = null
+    private var vpnService: com.nebula.nebula_vpn.VpnService? = null
     private var serviceBound = false
     
     // 等待 VPN 权限的 config
@@ -161,7 +161,7 @@ class MainActivity : FlutterActivity() {
         logI("========== bindToVpnService START ==========")
         
         // 使用 VpnService 单例获取实例
-        vpnService = VpnService.getInstance()
+        vpnService = com.nebula.nebula_vpn.VpnService.getInstance()
         serviceBound = vpnService != null
         
         logI("bindToVpnService: vpnService=$vpnService")
@@ -280,14 +280,14 @@ class MainActivity : FlutterActivity() {
                 // 每次轮询时刷新 VpnService 引用
                 if (vpnService == null) {
                     logD("startStatsPolling: vpnService is null, refreshing from getInstance()")
-                    vpnService = VpnService.getInstance()
+                    vpnService = com.nebula.nebula_vpn.VpnService.getInstance()
                     logD("startStatsPolling: vpnService refreshed: $vpnService")
                 }
                 
                 vpnService?.let { service ->
                     logD("startStatsPolling: getting stats from service")
                     val stats = service.getStats()
-                    val state = service.connectionState.value
+                    val state = service.connectionState
                     
                     logD("startStatsPolling: stats=$stats")
                     logD("startStatsPolling: state=$state")
@@ -479,13 +479,14 @@ class MainActivity : FlutterActivity() {
             // 刷新 VpnService 引用
             if (vpnService == null) {
                 logI("handleGetStatus: refreshing vpnService from getInstance()")
-                vpnService = VpnService.getInstance()
+                vpnService = com.nebula.nebula_vpn.VpnService.getInstance()
             }
             
             // 返回缓存的统计数据和连接状态
-            val isConnected = vpnService?.connectionState?.value == VpnService.ConnectionState.CONNECTED
-            val isRunning = vpnService?.connectionState?.value == VpnService.ConnectionState.CONNECTED ||
-                           vpnService?.connectionState?.value == VpnService.ConnectionState.CONNECTING
+            val state = vpnService?.connectionState
+            val isConnected = state == com.nebula.nebula_vpn.VpnService.ConnectionState.CONNECTED
+            val isRunning = state == com.nebula.nebula_vpn.VpnService.ConnectionState.CONNECTED ||
+                           state == com.nebula.nebula_vpn.VpnService.ConnectionState.CONNECTING
             
             val status = mapOf(
                 "connected" to isConnected,
