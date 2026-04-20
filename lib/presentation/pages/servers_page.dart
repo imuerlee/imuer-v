@@ -329,6 +329,7 @@ class ServersPage extends StatelessWidget {
         showGlow: false,
         margin: const EdgeInsets.only(bottom: 12),
         onTap: () {
+          context.read<VpnBloc>().add(SelectServer(server.id));
           context.read<VpnBloc>().add(ConnectVpn(server.id));
         },
         child: Row(
