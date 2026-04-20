@@ -25,9 +25,7 @@ jobs:
         with:
           flutter-version: '3.41.7'
           channel: 'stable'
-          cache: true
-          cache-key: flutter-linux-stable-${{ hashFiles('**/pubspec.lock') }}
-          cache-path: ~/.pub-cache
+          cache: false
 
       - name: Enable Linux desktop
         run: flutter config --enable-linux-desktop
