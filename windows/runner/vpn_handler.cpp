@@ -13,11 +13,14 @@
 #include <shlwapi.h>
 #include <psapi.h>
 #include <iphlpapi.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "psapi.lib")
 #pragma comment(lib, "iphlpapi.lib")
+#pragma comment(lib, "ws2_32.lib")
 
 namespace {
   constexpr const char* V2RAY_VERSION = "v5.22.0";
