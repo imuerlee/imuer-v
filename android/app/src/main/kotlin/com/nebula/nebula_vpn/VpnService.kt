@@ -45,7 +45,7 @@ class VpnService : VpnService() {
         const val PROXY_HOST = "127.0.0.1"
         const val PROXY_PORT = 10808
         
-        private var instance: VpnService? = null
+        private var instance: com.nebula.nebula_vpn.VpnService? = null
         
         fun logI(msg: String) { Log.i(TAG, "[I] $msg") }
         fun logE(msg: String) { Log.e(TAG, "[E] $msg") }
@@ -55,7 +55,7 @@ class VpnService : VpnService() {
         @Volatile
         private var isRunning = false
         
-        fun getInstance(): VpnService? = instance
+        fun getInstance(): com.nebula.nebula_vpn.VpnService? = instance
         fun isRunning(): Boolean = isRunning
         
         // Callbacks for MainActivity
