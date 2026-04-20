@@ -846,17 +846,118 @@ void VpnHandler::CollectTrafficStats() {
 bool VpnHandler::TestConnection() {
   LOGD("TestConn", "==== TestConnection START ====");
   
-  LOGD("TestConn", "TestConn: opening WinHTTP session");
-  HINTERNET hSession = WinHttpOpen(
-    L"NebulaVPN/1.0",
-    WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-    NULL, NULL, 0);
+  // Test by connecting through v2ray SOCKS proxy
+  LOGD("TestConn", "TestConn: creating socket");
   
-  if (!hSession) {
-    DWORD err = GetLastError();
-    LOGE_STR("TestConn", "TestConn: WinHttpOpen FAILED, error=" + std::to_string(err));
+  SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (sock == INVALID_SOCKET) {
+    DWORD err = WSAGetLastError();
+    LOGE_STR("TestConn", "TestConn: socket() FAILED, error=" + std::to_string(err));
     return FALSE;
   }
+  LOGD("TestConn", "TestConn: socket created");
+  
+  // Set timeout
+  DWORD timeout = HTTP_TIMEOUT_MS;
+  setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+  setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeout, sizeof(timeout));
+  
+  // Connect to v2ray SOCKS proxy
+  LOGD("TestConn", "TestConn: connecting to v2ray SOCKS proxy at 127.0.0.1:10808");
+  sockaddr_in proxyAddr = {};
+  proxyAddr.sin_family = AF_INET;
+  proxyAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+  proxyAddr.sin_port = htons(10808);
+  
+  int connResult = connect(sock, (sockaddr*)&proxyAddr, sizeof(proxyAddr));
+  if (connResult == SOCKET_ERROR) {
+    DWORD err = WSAGetLastError();
+    LOGE_STR("TestConn", "TestConn: connect() to SOCKS proxy FAILED, error=" + std::to_string(err));
+    closesocket(sock);
+    return FALSE;
+  }
+  LOGD("TestConn", "TestConn: connected to SOCKS proxy");
+  
+  // Build SOCKS5 CONNECT request for www.google.com:443
+  const char* targetHost = "www.google.com";
+  int targetPort = 443;
+  
+  unsigned char socksRequest[100];
+  socksRequest[0] = 0x05;  // SOCKS version
+  socksRequest[1] = 0x01;  // CMD: CONNECT
+  socksRequest[2] = 0x00;  // RSV
+  socksRequest[3] = 0x03;  // ATYP: Domain name
+  
+  // Domain name length (1 byte) + domain name + port (2 bytes)
+  size_t hostLen = strlen(targetHost);
+  socksRequest[4] = (unsigned char)hostLen;
+  memcpy(&socksRequest[5], targetHost, hostLen);
+  
+  socksRequest[5 + hostLen] = (unsigned char)(targetPort >> 8);
+  socksRequest[6 + hostLen] = (unsigned char)(targetPort & 0xFF);
+  
+  size_t requestLen = 7 + hostLen;
+  
+  LOGD("TestConn", "TestConn: sending SOCKS5 CONNECT request");
+  int sent = send(sock, (const char*)socksRequest, (int)requestLen, 0);
+  if (sent == SOCKET_ERROR) {
+    DWORD err = WSAGetLastError();
+    LOGE_STR("TestConn", "TestConn: send() FAILED, error=" + std::to_string(err));
+    closesocket(sock);
+    return FALSE;
+  }
+  LOGD("TestConn", "TestConn: SOCKS request sent, bytes=" + std::to_string(sent));
+  
+  // Read SOCKS response
+  unsigned char socksResponse[100];
+  int received = recv(sock, (char*)socksResponse, sizeof(socksResponse), 0);
+  if (received == SOCKET_ERROR) {
+    DWORD err = WSAGetLastError();
+    LOGE_STR("TestConn", "TestConn: recv() FAILED, error=" + std::to_string(err));
+    closesocket(sock);
+    return FALSE;
+  }
+  
+  LOGD("TestConn", "TestConn: SOCKS response received, len=" + std::to_string(received));
+  
+  // Check SOCKS response (should be VER=0x05, REP=0x00)
+  if (received < 2 || socksResponse[0] != 0x05 || socksResponse[1] != 0x00) {
+    LOGE("TestConn", "TestConn: SOCKS connection FAILED!");
+    closesocket(sock);
+    return FALSE;
+  }
+  
+  LOGD("TestConn", "TestConn: SOCKS CONNECT SUCCESS");
+  
+  // Send simple HTTPS request through SOCKS
+  const char* httpRequest = "HEAD / HTTP/1.0\r\nHost: www.google.com\r\n\r\n";
+  LOGD("TestConn", "TestConn: sending HTTP request through SOCKS");
+  
+  sent = send(sock, httpRequest, (int)strlen(httpRequest), 0);
+  if (sent == SOCKET_ERROR) {
+    DWORD err = WSAGetLastError();
+    LOGE_STR("TestConn", "TestConn: send() HTTP request FAILED, error=" + std::to_string(err));
+    closesocket(sock);
+    return FALSE;
+  }
+  
+  // Read response (should get some data back)
+  char response[1024];
+  received = recv(sock, response, sizeof(response) - 1, 0);
+  
+  if (received > 0) {
+    response[received] = '\0';
+    LOGD("TestConn", "TestConn: received response, len=" + std::to_string(received));
+    LOGD_STR("TestConn", "TestConn: response starts with: " + std::string(response, std::min(50, received)));
+    closesocket(sock);
+    LOGD("TestConn", "==== TestConnection SUCCESS ====");
+    return TRUE;
+  }
+  
+  closesocket(sock);
+  LOGD("TestConn", "==== TestConnection END ====");
+  return FALSE;
+}
   LOGD("TestConn", "TestConn: WinHttpOpen SUCCESS");
   
   // 设置超时
